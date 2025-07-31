@@ -20,54 +20,58 @@ tags:
     - Hash → JSON 비슷한 구조 (user: {name: “A”, age: 20})
     - Stream → 이벤트 로그, 카프카 비슷하게 사용 가능
 => 이 자료구조 덕분에 캐시 + 큐 + 랭킹 + pub/sub까지 다 가능  
-- redis가 NoSQL이라는 말은, key-value 기반으로 일반적인 RDB와는 다르게 테이블도 없고 스키마도 없어서 e.g. alter table을 해줄 필요가 없고, key -> value 형태로 다양한 자료구조를 저장할 수 있기 때문에, RDB처럼 JOIN, 복잡한 트랜젝션은 불가능 하지만 대신 속도와 단순성을 최적화 했다는 특징이 있다. 
+- redis가 NoSQL이라는 말은, key-value 기반으로 일반적인 RDB와는 다르게 테이블도 없고 스키마도 없어서 e.g. alter table을 해줄 필요가 없고, key -> value 형태로 다양한 자료구조를 저장할 수 있기 때문에, RDB처럼 JOIN, 복잡한 트랜잭션은 불가능 하지만 대신 속도와 단순성을 최적화 했다는 특징이 있다. 
 
 
 ## 주요 특징
 - **인메모리 저장**: 빠른 읽기/쓰기 성능
-- **다양한 데이터 타입**: String, List, Set, Hash, Sorted Set
+- **다양한 데이터 타입**: String, List, Set, Hash, Sorted Set, Stream, Geospatial, HyperLogLog, Bitmap, Bitfield
 - **영속성**: RDB, AOF 방식으로 데이터 영속성 보장
 - **클러스터링**: 수평적 확장 가능
 
 - 여기서 영속성에 대하여..
-  - Redis는 휘발성인 인메모리에 데이터를 저장하기 때문에 데이털르 영구적으로 저장할 수 없다. cache 용도로만 사용한다면 상관없겠지만, 캐시 이외의 용도로 사용한다면 데이터 백업이 필수다. 
+  - Redis는 휘발성인 인메모리에 데이터를 저장하기 때문에 데이터를 영구적으로 저장할 수 없다. cache 용도로만 사용한다면 상관없겠지만, 캐시 이외의 용도로 사용한다면 데이터 백업이 필수다. 
   - 이에 Redis는 데이터를 영속화하기 위한 `RDB(Redis Database)`와 `AOF(Append Only File)` 2가지 방법을 제공한다. 
   - RDB: 
-    - 설정한 일정 시간 단위로 레디스 DB의 스냅샷을 백업하고, 필요시 특정한 시점의 스냅샷으로 롤업할 수 있다.
+    - 설정한 일정 시간 단위로 레디스 DB의 스냅샷을 백업하고, 필요시 특정한 시점의 스냅샷으로 롤백할 수 있다.
+  - AOF:
+    - 모든 쓰기 작업을 로그 파일에 기록하여 데이터 복구를 보장한다.
 
 ## 기본 명령어
 - 맥북에서
 ```bash
-# Homebrew로 설치
+// Homebrew로 설치
 brew install redis
 
-# Redis 서버 실행
+//  Redis 서버 실행
 redis-server
 
-# 다른 터미널에서 클라이언트 접속
+// 다른 터미널에서 클라이언트 접속
 redis-cli
 ```
+
 - Ubuntu에서
 ```bash 
 sudo apt update
 sudo apt install redis-server -y
 
-# Redis 서버 시작
+// Redis 서버 시작
 sudo systemctl start redis-server
 
-# 부팅 시 자동 시작 설정
+// 부팅 시 자동 시작 설정
 sudo systemctl enable redis-server
 
-# 동작 확인
+// 동작 확인
 redis-cli ping
-# → PONG
+// → PONG
 ``` 
+
 - Docker에서
 ```bash 
-# 단일 컨테이너 실행 (-d 백그라운드 실행, -p 6379:6379 : 호스트 6379 포트와 컨테이너 6379 포트 연결)
+// 단일 컨테이너 실행 (-d 백그라운드 실행, -p 6379:6379 : 호스트 6379 포트와 컨테이너 6379 포트 연결)
 docker run -d --name my-redis -p 6379:6379 redis
 
-# 컨테이너 내부에서 redis-cli 실행
+// 컨테이너 내부에서 redis-cli 실행
 docker exec -it my-redis redis-cli
 ``` 
 
