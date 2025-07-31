@@ -295,5 +295,10 @@ tags:
 
 
 ---
-> cf. reference 
+<details>
+<summary>cf. reference</summary>
+
 - https://inpa.tistory.com/entry/REDIS-%F0%9F%93%9A-%EB%8D%B0%EC%9D%B4%ED%84%B0-%ED%83%80%EC%9E%85Collection-%EC%A2%85%EB%A5%98-%EC%A0%95%EB%A6%AC
+
+</details>
+

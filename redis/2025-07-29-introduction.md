@@ -174,5 +174,9 @@ docker exec -it my-redis redis-cli
 
 
 ---
-> cf. reference  
+<details>
+<summary>cf. reference</summary>
+
 - https://velog.io/@ohjinseo/Redis%EA%B0%80-%EC%8B%B1%EA%B8%80-%EC%8A%A4%EB%A0%88%EB%93%9C-%EB%AA%A8%EB%8D%B8%EC%9E%84%EC%97%90%EB%8F%84-%EB%86%92%EC%9D%80-%EC%84%B1%EB%8A%A5%EC%9D%84-%EB%B3%B4%EC%9E%A5%ED%95%98%EB%8A%94-%EC%9D%B4%EC%9C%A0-IO-Multiplexing
+
+</details>

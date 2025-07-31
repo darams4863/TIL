@@ -72,7 +72,42 @@ Redis는 내부적으로 epoll(리눅스)이나 kqueue(맥) 같은 이벤트 감
 
 
 
+1.	RDB와 AOF의 차이와 장단점은?
+2.	RDB + AOF 혼용 모드의 동작 방식을 설명해보세요.
+3.	Redis 복제가 비동기라면 어떤 문제가 발생할 수 있나요?
+4.	Replica 초기 동기화 과정과 PSYNC의 차이점은?
+5.	Sentinel과 Cluster의 차이와 장애 처리 방식은?
+6.	Fork 시 발생하는 latency spike는 왜 생기나요?
+
+
+
+
+
+## 6. 면접 질문 예시
+
+### 6.1 기본 질문
+1. **RDB와 AOF의 차이점은?**
+2. **Redis 복제에서 데이터 유실이 발생할 수 있는 경우는?**
+3. **Sentinel과 Cluster의 차이점은?**
+
+### 6.2 심화 질문
+1. **Fork 시 메모리 사용량이 2배가 되는 이유는?**
+2. **복제 지연이 발생하는 원인과 해결 방법은?**
+3. **Redis Cluster에서 16384개 슬롯인 이유는?**
+4. **Sentinel과 Cluster의 차이점과 언제 사용해야 하나?**
+5. **클러스터에서 MGET 명령어가 실패하는 이유는?**
+6. **해시 태그를 사용하는 이유와 주의사항은?**
+
+### 6.3 실무 질문
+1. **대용량 Redis에서 RDB 저장 시 성능 저하를 어떻게 해결하나?**
+2. **복제 환경에서 읽기 일관성을 어떻게 보장하나?**
+3. **네트워크 파티션 시 데이터 불일치를 어떻게 처리하나?**
+
 --- 
-> cf. reference 
+<details>
+<summary>cf. reference</summary>
+
 - https://jaehyuuk.tistory.com/216
 - https://sunro1994.tistory.com/333#Redis%EB%A5%BC%20%ED%99%9C%EC%9A%A9%ED%95%98%EC%97%AC%20%EC%84%B8%EC%85%98%20%EC%A0%80%EC%9E%A5%EC%86%8C%EB%A1%9C%20%EC%82%AC%EC%9A%A9%ED%95%A0%20%EA%B2%BD%EC%9A%B0%EC%9D%98%20%EC%9E%A5%EC%A0%90%EA%B3%BC%20%EB%8B%A8%EC%A0%90%EC%9D%80%20%EB%AC%B4%EC%97%87%EC%9D%B8%EA%B0%80%EC%9A%94%3F-1-33
+
+</details>
