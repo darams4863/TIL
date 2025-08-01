@@ -44,7 +44,7 @@ Redis에서는 두 가지 영속성 방식을 제공합니다:
 
 **단점:**
 - 스냅샷 사이에 발생한 데이터는 유실 가능성이 있다
-- Fork 시 메모리 사용량 2배 증가 -> 잠깐의 latency spike 가능
+- Fork 시 메모리 사용량 2배 증가 -> 잠깐의 latency spike 가능 (fork latency)
 - 저장 중 성능 저하 (Latency Spike)
 
 

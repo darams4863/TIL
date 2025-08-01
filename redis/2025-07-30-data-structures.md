@@ -226,31 +226,25 @@ tags:
     PFCOUNT daily_uv  // 방문자 수 추정
     ```
 
-
 ## Streams
 - Redis 5.0부터 추가된 메시지 스트리밍 자료구조
 - Pub/Sub + Queue + Log의 장점을 합친 구조
-- 유실 없는 메시지 처리가 가능하고, 소비 이력을 (log) Redis에 저장할 수 있음
-- Append-Only
+- 유실 없는 메시지 처리가 가능하고, 소비 이력을 Redis에 저장할 수 있음
 - 주요 명령어: 
   ```bash
   XADD key * field1 value1 [field2 value2 ...]   // 새 메시지 추가
   XREAD COUNT n STREAMS key [ID]                 // 메시지 읽기
   XRANGE key start end [COUNT n]                 // 범위 조회
-  XREVRANGE key end start [COUNT n]              // 역순 조회
-  XDEL key ID                                    // 특정 메시지 삭제
-  XLEN key                                       // 메시지 개수
   XGROUP CREATE key groupname ID                 // Consumer Group 생성
   XREADGROUP GROUP group consumer STREAMS key >  // 그룹 단위 읽기
   XACK key group ID                              // 메시지 처리 완료
   ```
 - 활용 사례: 
   - Pub/Sub 대체 (소비 확인 가능)
-  - 마이크로서비스 간 이벤트 스트리밍
-  - 유실 없는 메시지 큐/분산 작업 큐 (Worker들이 Consumer Group으로 분산 처리)
-  - 예: Slack 입금 알림
-    - 실시간 로그 스트리밍 + 알림 후 Ack 처리
-
+  - 유실 없는 메시지 큐/분산 작업 큐
+  - Consumer Group으로 여러 Worker가 분산 처리
+  - 예: 실시간 알림 시스템
+    - 메시지 발행 → Consumer Group으로 분산 처리 → ACK로 완료 확인
 
 ## Geospatial Indexes
 - 좌표 기반 데이터 저장 및 거리 계산 가능
@@ -260,18 +254,13 @@ tags:
   GEOADD key longitude latitude member        // 위치 추가
   GEODIST key member1 member2 [unit]          // 거리 계산
   GEOPOS key member1 [member2 ...]            // 좌표 조회
-  // GEORADIUS key lon lat radius m|km           // 원형 반경 검색 (deprecated → GEOSEARCH)
   GEOSEARCH key lon lat BYRADIUS r m|km       // 좌표 기반 검색
-  GEOSEARCH key member BYBOX w h m|km         // 상자 영역 검색
   ```
 - 활용 사례:
-  - 위치 정보를 이용해서 현재 위치 기준으로 가장 가까운 정류장 5개를 추출해서 고객에게 길안내 정보 제공 
   - 주변 매장 검색
     - 예: store_locations에 편의점 좌표 등록 후 2km 내 검색
   - 라이더/기사 배차
     - 예: 배달 앱에서 고객 주변 500m 라이더 탐색
-  - 위치 기반 푸시 알림
-    - 예: 특정 행사장 반경 1km 사용자에게 푸시 발송
 
 
 ## Bitfields
