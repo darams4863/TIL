@@ -103,6 +103,116 @@ Redis는 내부적으로 epoll(리눅스)이나 kqueue(맥) 같은 이벤트 감
 2. **복제 환경에서 읽기 일관성을 어떻게 보장하나?**
 3. **네트워크 파티션 시 데이터 불일치를 어떻게 처리하나?**
 
+
+
+
+Q: "웹소켓 대신 Redis Pub/Sub을 사용하면 좋은 점은?"
+
+A: "웹소켓 대신 Redis Pub/Sub을 사용하면 크게 3가지 장점이 있습니다.
+
+첫째, 서버 부하 분산입니다. 웹소켓은 각 클라이언트마다 개별 연결을 유지해야 하는데, 
+클라이언트가 많아지면 서버 메모리 사용량이 급증합니다. 
+반면 Redis Pub/Sub은 애플리케이션 서버가 메시지 발행만 담당하고, 
+Redis가 브로드캐스트를 처리하므로 서버 부하가 일정합니다.
+
+둘째, 확장성입니다. 웹소켓으로 서버를 2대 운영하면 복잡한 로드밸런싱이 필요하고, 
+서버 간 메시지 전달도 별도 구현해야 합니다. 
+Redis Pub/Sub은 서버가 추가되어도 Redis가 자동으로 모든 구독자에게 메시지를 전달해주므로 확장이 쉽습니다.
+
+셋째, 개발 복잡도 감소입니다. 웹소켓은 연결 관리, 브로드캐스트 로직, 연결 해제 처리 등 
+복잡한 코드가 필요한 반면, Redis Pub/Sub은 단순히 publish 명령어 하나로 모든 구독자에게 메시지를 전달할 수 있습니다.
+
+실제로 제가 작업한 프로젝트에서 실시간 알림 시스템을 구현할 때, 
+처음에는 웹소켓으로 했는데 사용자가 늘어나면서 서버 부하가 심해졌습니다. 
+Redis Pub/Sub으로 변경하니 서버 부하가 크게 줄어들고, 새로운 알림 타입을 추가할 때도 코드 수정이 최소화되었습니다.
+
+단, Redis Pub/Sub은 단방향 통신에 적합하고, 양방향 실시간 통신이 필요한 경우에는 웹소켓이 더 적합합니다. 
+예를 들어 채팅처럼 클라이언트에서 서버로 즉시 응답이 필요한 경우는 웹소켓을 사용하는 것이 좋습니다."
+
+-> 꼬리질문 예상
+	•	“그럼 Redis Pub/Sub 대신 Stream을 쓰면 뭐가 다른가요?”
+	•	“Redis Pub/Sub 구조에서 서버가 재시작하면 메시지는 어떻게 되나요?”
+	•	“WebSocket과 Redis Pub/Sub을 같이 써야 하는 경우는 언제인가요?”
+	•	“Kafka 같은 메시지 큐와 비교하면 장단점은 뭐가 있나요?”
+
+
+
+
+
+🔹 면접 예상 질문
+
+1️⃣ Pub/Sub 관련
+	1.	Redis Pub/Sub의 기본 동작 원리를 설명해보세요.
+	2.	Pub/Sub의 장점과 단점을 각각 설명해보세요.
+	3.	구독자가 오프라인 상태일 때 메시지는 어떻게 되나요?
+	4.	Pub/Sub에서 특정 구독자에게만 메시지를 보내려면 어떻게 해야 할까요?
+	5.	Pub/Sub의 실무 활용 사례를 말해보세요.
+
+2️⃣ Stream 관련
+	1.	Redis Stream의 특징과 Pub/Sub과의 차이점은 무엇인가요?
+	2.	Consumer Group의 동작 원리를 설명해보세요.
+	3.	Stream에서 메시지 재처리가 필요한 경우 어떻게 대응하나요?
+	4.	Pending 상태란 무엇이며 어떻게 관리하나요?
+	5.	XADD, XREAD, XACK 명령어 각각의 역할을 설명해보세요.
+
+3️⃣ 종합/응용 질문
+	1.	Redis Pub/Sub과 Stream 중 실시간 알림 시스템에 적합한 것은 무엇이며, 그 이유는?
+	2.	로그 수집 및 장애 재처리가 필요한 경우 어떤 방식을 선택할까요?
+	3.	Kafka 대신 Redis Stream을 사용하는 장단점을 설명해보세요.
+	4.	Pub/Sub과 Stream을 하이브리드로 구성해야 한다면 어떤 구조를 설계하겠습니까?
+	5.	Stream의 Consumer Group에서 하나의 Consumer가 죽었을 때 메시지는 어떻게 처리되나요?
+
+
+
+
+
+stream > consumer group 관련 
+🔹 면접 답변 포인트
+	1.	Consumer Group의 역할
+“Stream 메시지를 여러 Consumer가 안전하게 분산 처리할 수 있도록 하는 구조이며, ACK 기반으로 유실 없이 재처리가 가능합니다.”
+	2.	Consumer 장애 시 동작
+“ACK 안 된 메시지는 Pending 상태로 남고, 다른 Consumer가 XCLAIM으로 가져와 처리합니다.”
+	3.	운영 시 주의점
+“ACK 관리, XPENDING 확인, XTRIM으로 메모리 관리가 필요합니다.”
+
+
+
+
+레디스 pub/sub vs stream vs queue 관련 면접 질문 
+1️⃣ Redis Pub/Sub
+	1.	Pub/Sub의 메시지 전달 보장 수준은? (Lv.1)
+	2.	구독자가 오프라인일 경우 메시지는 어떻게 되나요? (Lv.1)
+	3.	Redis Cluster 환경에서 Pub/Sub을 사용할 때 주의할 점은? (Lv.2)
+	4.	Pub/Sub을 이용해 채팅 시스템을 만든다면 어떤 문제가 생길 수 있고, 이를 어떻게 해결할 수 있나요? (Lv.2)
+	5.	실시간 알림 시스템에서 Pub/Sub 대신 Kafka를 선택할 이유는 무엇일까요? (Lv.3)
+⸻
+2️⃣ Redis Stream
+	1.	Redis Stream과 Pub/Sub의 가장 큰 차이점은 무엇인가요? (Lv.1)
+	2.	Stream에서 Consumer Group이 하는 역할은 무엇인가요? (Lv.1)
+	3.	Stream 메시지를 처리 중 Consumer가 죽으면 어떤 일이 발생하나요? (Lv.2)
+	4.	Pending Entry List(PEL)가 무엇이고, 장애 복구 시 어떻게 활용할 수 있나요? (Lv.2)
+	5.	Stream을 로그 수집 시스템으로 사용할 때 주의할 점은 무엇인가요? (Lv.3)
+	6.	Kafka 대신 Redis Stream을 사용할 수 있는 시나리오와 한계는? (Lv.3)
+⸻
+3️⃣ Redis Queue (List)
+	1.	Redis List 기반 Queue를 구현할 때 주의해야 할 점은? (Lv.1)
+	2.	BLPOP/BRPOP과 RPOPLPUSH를 활용한 안전한 Queue 처리 방식은 무엇인가요? (Lv.2)
+	3.	Consumer가 메시지를 처리하다 죽으면 메시지가 어떻게 되나요? (Lv.2)
+	4.	Stream과 Queue의 차이점은 무엇이며, 언제 Queue를 선택하나요? (Lv.1)
+⸻
+4️⃣ 종합 / 응용 질문
+	1.	실시간 채팅, 로그 수집, 결제 처리 각각에 어떤 방식을 쓰겠는지 선택하고 이유를 설명해보세요. (Lv.2)
+	2.	Pub/Sub → Queue → Stream으로 발전하는 이유를 설계 관점에서 설명해보세요. (Lv.2)
+	3.	Stream에서 ACK 기반 재처리 로직을 구현하지 않으면 어떤 문제가 생길까요? (Lv.2)
+	4. 	대규모 트래픽 환경에서 Redis Pub/Sub을 사용하면 병목이 어디서 생길 수 있는지 설명해보세요. (Lv.3)
+
+
+
+
+
+
+
+
 --- 
 <details>
 <summary>cf. reference</summary>
@@ -110,4 +220,5 @@ Redis는 내부적으로 epoll(리눅스)이나 kqueue(맥) 같은 이벤트 감
 - https://jaehyuuk.tistory.com/216
 - https://sunro1994.tistory.com/333#Redis%EB%A5%BC%20%ED%99%9C%EC%9A%A9%ED%95%98%EC%97%AC%20%EC%84%B8%EC%85%98%20%EC%A0%80%EC%9E%A5%EC%86%8C%EB%A1%9C%20%EC%82%AC%EC%9A%A9%ED%95%A0%20%EA%B2%BD%EC%9A%B0%EC%9D%98%20%EC%9E%A5%EC%A0%90%EA%B3%BC%20%EB%8B%A8%EC%A0%90%EC%9D%80%20%EB%AC%B4%EC%97%87%EC%9D%B8%EA%B0%80%EC%9A%94%3F-1-33
 
+- [NHN FORWARD 2021](https://www.youtube.com/watch?v=92NizoBL4uA)
 </details>
