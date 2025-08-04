@@ -246,6 +246,96 @@ tags:
   - 예: 실시간 알림 시스템
     - 메시지 발행 → Consumer Group으로 분산 처리 → ACK로 완료 확인
 
+### Stream 심화: Consumer Group / ACK / Pending Message 처리 흐름
+
+#### Consumer Group 구조
+```bash
+# Consumer Group 생성
+XGROUP CREATE notifications mygroup 0
+
+# Consumer Group으로 메시지 읽기
+XREADGROUP GROUP mygroup consumer1 COUNT 1 STREAMS notifications >
+
+# 메시지 처리 완료 확인 (ACK)
+XACK notifications mygroup 1640995200000-0
+```
+
+#### 메시지 처리 흐름
+1. **메시지 발행**: `XADD notifications * type "email" user_id "123"`
+2. **Consumer Group으로 읽기**: `XREADGROUP GROUP mygroup worker1 STREAMS notifications >`
+3. **메시지 처리**: 비즈니스 로직 실행
+4. **ACK 전송**: `XACK notifications mygroup [message_id]`
+5. **Pending Message 확인**: `XPENDING notifications mygroup`
+
+#### Pending Message 처리
+```bash
+# 처리되지 않은 메시지 확인
+XPENDING notifications mygroup
+
+# 특정 Consumer의 Pending 메시지 조회
+XPENDING notifications mygroup - + 10 consumer1
+
+# Pending 메시지 재처리
+XCLAIM notifications mygroup consumer2 3600000 1640995200000-0
+```
+
+#### 면접에서 "Pub/Sub vs Stream vs List" 차이점 설명하기
+
+**Q: "Redis에서 Pub/Sub, Stream, List의 차이점을 설명해주세요"**
+
+**A: "세 가지 방식은 각각 다른 메시징 패턴을 지원합니다.**
+
+**1. Pub/Sub (Publish/Subscribe):**
+- **특징**: 실시간 브로드캐스트, 메시지 유실 가능
+- **동작**: 발행자 → 구독자들에게 즉시 전달
+- **장점**: 실시간성, 간단한 구현
+- **단점**: 메시지 유실, 구독자 오프라인 시 메시지 손실
+- **사용 사례**: 실시간 알림, 채팅방 메시지
+
+**2. List (Queue):**
+- **특징**: 단순한 FIFO 큐, 메시지 보장
+- **동작**: LPUSH → BRPOP으로 순차 처리
+- **장점**: 메시지 보장, 간단한 구조
+- **단점**: 단일 소비자, 메시지 재처리 어려움
+- **사용 사례**: 단순 작업 큐, 로그 처리
+
+**3. Stream:**
+- **특징**: 고급 메시징, Consumer Group 지원
+- **동작**: XADD → XREADGROUP → XACK
+- **장점**: 
+  - 메시지 영속성 보장
+  - Consumer Group으로 분산 처리
+  - ACK로 처리 완료 확인
+  - Pending Message 재처리
+- **단점**: 복잡한 구조, 학습 곡선
+- **사용 사례**: 분산 작업 큐, 이벤트 소싱
+
+**실제 코드 비교:**
+```bash
+# Pub/Sub
+SUBSCRIBE notifications
+PUBLISH notifications "Hello"
+
+# List (Queue)
+LPUSH job_queue "task1"
+BRPOP job_queue 0
+
+# Stream
+XADD event_stream * event "user_login" user_id "123"
+XREADGROUP GROUP workers worker1 STREAMS event_stream >
+XACK event_stream workers [message_id]
+```
+
+**언제 어떤 것을 사용할까요?**
+- **Pub/Sub**: 실시간 알림, 구독자에게 즉시 전달이 필요한 경우
+- **List**: 단순한 작업 큐, 순차 처리가 필요한 경우  
+- **Stream**: 분산 처리, 메시지 보장, 재처리가 필요한 경우
+
+**면접 팁:**
+- "메시지 유실 가능성"과 "처리 보장"이 핵심 차이점
+- "Consumer Group"과 "ACK"는 Stream의 핵심 기능
+- 실제 사용 사례를 들어가며 설명하면 좋습니다"
+
 ## Geospatial Indexes
 - 좌표 기반 데이터 저장 및 거리 계산 가능
 - 지구 반경 계산을 위해 내부적으로 GeoHash 사용

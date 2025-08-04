@@ -17,7 +17,7 @@ tags:
     - String → 단순 값
     - List → 큐, 스택
     - Set / Sorted Set → 중복 없는 집합, 랭킹 시스템
-    - Hash → JSON 비슷한 구조 (user: {name: “A”, age: 20})
+    - Hash → JSON 비슷한 구조 (user: {name: "A", age: 20})
     - Stream → 이벤트 로그, 카프카 비슷하게 사용 가능
 => 이 자료구조 덕분에 캐시 + 큐 + 랭킹 + pub/sub까지 다 가능  
 - redis가 NoSQL이라는 말은, key-value 기반으로 일반적인 RDB와는 다르게 테이블도 없고 스키마도 없어서 e.g. alter table을 해줄 필요가 없고, key -> value 형태로 다양한 자료구조를 저장할 수 있기 때문에, RDB처럼 JOIN, 복잡한 트랜잭션은 불가능 하지만 대신 속도와 단순성을 최적화 했다는 특징이 있다. 
@@ -127,7 +127,7 @@ docker exec -it my-redis redis-cli
     - 싱글 스레드는 한 스레드만 계속 돌아가므로 → 캐시가 유지되어 연속적 접근 효율 ↑
 
 
-### 2. I/O Multiplexing(epoll/kqueue)
+### 2. I/O Multiplexing(epoll/kqueue) - Event Loop & 내부 구조
 - 요약:
     - I/O Multiplexing 기법: 
         - Redis는 싱글 스레드지만 I/O Multiplexing으로 높은 성능을 냅니다.
@@ -146,6 +146,110 @@ docker exec -it my-redis redis-cli
             1. 소켓 이벤트 꺼내 처리
             2. 응답 보내기
     ```
+
+#### Redis Event Loop 상세 구조
+**핵심 구성 요소:**
+1. **File Descriptor (파일 디스크립터)**
+   - 네트워크 소켓, 파일, 파이프 등을 추상화한 정수
+   - Redis에서는 주로 TCP 소켓을 의미
+   - 예: 클라이언트 연결마다 고유한 fd 할당
+
+2. **epoll (Linux) / kqueue (macOS)**
+   - OS 커널이 제공하는 이벤트 감시 시스템
+   - 수천 개 fd를 효율적으로 모니터링
+   - "데이터가 준비된 fd"만 알려줌
+
+3. **Event Loop (이벤트 루프)**
+   - 무한 루프로 이벤트를 처리하는 redis의 메인 로직
+   - epoll에서 준비된 이벤트를 가져와서 처리
+
+#### File Descriptor 처리 흐름
+```bash
+# 1. 클라이언트 연결 수락
+accept() → 새로운 fd 생성 (예: fd=5)
+
+# 2. epoll에 fd 등록
+epoll_ctl(EPOLL_CTL_ADD, fd=5, EPOLLIN)  # 읽기 이벤트 감시
+
+# 3. 이벤트 루프에서 대기
+epoll_wait() → 준비된 fd 목록 반환
+
+# 4. 준비된 fd 처리
+for fd in ready_fds:
+    if fd == 5:  # 클라이언트 요청
+        data = read(fd=5)  # 데이터 읽기
+        result = process_command(data)  # Redis 명령 처리
+        write(fd=5, result)  # 응답 전송
+```
+
+#### Event Loop 상세 동작 과정
+```python
+# Redis 이벤트 루프 의사 코드
+def redis_event_loop():
+    # 1. epoll 인스턴스 생성
+    epoll_fd = epoll_create()
+    
+    # 2. 서버 소켓을 epoll에 등록
+    server_fd = create_server_socket()
+    epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, EPOLLIN)
+    
+    # 3. 무한 루프 - 이벤트 처리
+    while True:
+        # 3-1. 준비된 이벤트 대기 (블로킹)
+        events = epoll_wait(epoll_fd, timeout=100ms)
+        
+        # 3-2. 각 이벤트 처리
+        for fd, event_type in events:
+            if fd == server_fd:
+                # 새 클라이언트 연결
+                client_fd = accept(server_fd)
+                epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, EPOLLIN)
+                
+            else:
+                # 클라이언트 요청 처리
+                if event_type == EPOLLIN:  # 읽기 가능
+                    data = read(fd)
+                    if data:
+                        result = process_redis_command(data)
+                        write(fd, result)
+                    else:
+                        # 연결 종료
+                        close(fd)
+                        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd)
+```
+
+#### epoll vs select/poll 비교
+```bash
+# select 방식 (구식)
+select(fd_set, timeout)  # 모든 fd를 순회하며 확인
+# 문제: fd 개수에 비례하여 성능 저하
+
+# epoll 방식 (현대적)
+epoll_wait()  # 준비된 fd만 반환
+# 장점: fd 개수와 무관하게 O(1) 성능
+```
+
+#### 면접에서 epoll vs select/poll 설명해야 할 때
+- **Q: "epoll과 select의 차이점을 설명해주세요"**
+- **A: "네, 두 방식의 핵심 차이점은 '어떻게 준비된 소켓을 찾는가'입니다.**
+- **select 방식 (구식):**
+    - 모든 파일 디스크립터(fd)를 **순차적으로 하나씩 확인**합니다
+    - 마치 1000명의 학생이 있는 교실에서 "숙제 다 했나?"라고 한 명씩 물어보는 것과 같습니다
+    - 연결 수가 늘어날수록 성능이 선형적으로 저하됩니다 (O(n) 복잡도)
+    - 예를 들어 10,000개 연결이 있으면 10,000번 확인해야 합니다
+- **epoll 방식 (현대적):**
+    - OS 커널이 **준비된 소켓만 알려줍니다**
+    - 마치 교실에서 "숙제 다 한 사람만 손을 들어!"라고 하면 손 든 사람만 알 수 있는 것과 같습니다
+    - 연결 수와 무관하게 일정한 성능을 유지합니다 (O(1) 복잡도)
+    - 10,000개 연결이 있어도 실제로 데이터가 준비된 10개만 처리하면 됩니다
+- **왜 이게 중요한가요?**
+    - Redis는 수천, 수만 개의 클라이언트 연결을 동시에 처리해야 합니다
+    - select 방식으로는 연결이 많아질수록 성능이 급격히 떨어집니다
+    - epoll 덕분에 Redis는 싱글 스레드임에도 높은 동시성을 보장할 수 있습니다
+- **면접 팁:**
+    - "select는 모든 것을 확인하고, epoll은 준비된 것만 알려준다"가 핵심
+    - 비유를 들어가며 설명하면 이해하기 쉽습니다
+    - 실제 성능 차이(O(n) vs O(1))를 언급하면 좋습니다"
 
 #### Redis에서 I/O 처리 방식
 **핵심 개념:**
@@ -190,6 +294,12 @@ A: "주로 네트워크 I/O가 병목입니다. Redis는 I/O 바운드 애플리
 
 **Q: "Redis가 수천 개 연결을 어떻게 처리하나요?"**
 A: "이벤트 기반으로 동작해서 데이터가 준비된 소켓만 처리합니다. OS가 준비된 소켓을 알려주므로 효율적으로 처리할 수 있습니다."
+
+**Q: "epoll과 select의 차이점은?"**
+A: "select는 모든 fd를 순회하지만, epoll은 준비된 fd만 반환합니다. 따라서 연결 수가 많을 때 epoll이 훨씬 효율적입니다."
+
+**Q: "Redis 이벤트 루프에서 파일 디스크립터는 어떻게 처리되나요?"**
+A: "클라이언트 연결마다 고유한 fd가 할당되고, epoll에 등록되어 이벤트를 감시합니다. 데이터가 준비되면 이벤트 루프에서 처리합니다."
 
 
 ### 3. 모든 데이터를 메모리에서 처리 → 디스크 I/O 최소화

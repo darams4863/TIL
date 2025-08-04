@@ -521,6 +521,69 @@ pipeline.execute()
 | **복잡도** | 간단 | 복잡 |
 | **사용 사례** | 고가용성 중시 | 확장성 + 고가용성 |
 
+### 4.7 클러스터링 세부 사항
+
+#### Hash Slot (16384개)
+- **개념**: Redis Cluster에서 데이터를 논리적으로 분산하는 단위
+- **개수**: 2^14 = 16384개 (14비트로 슬롯 정보 표현)
+- **계산**: `CRC16(key) % 16384`
+- **분배**: 각 Master 노드가 일부 슬롯을 담당
+
+#### Key Tagging (해시 태그)
+- **목적**: 관련된 키들을 같은 슬롯에 배치
+- **문법**: `{tag}key` 형태로 중괄호 안의 태그로 슬롯 결정
+- **예시**:
+  ```bash
+  # 같은 슬롯에 배치됨
+  user:{1000}:profile
+  user:{1000}:settings
+  user:{1000}:preferences
+  
+  # 다른 슬롯에 배치됨
+  user:1000:profile
+  user:1000:settings
+  ```
+
+#### MGET/MSET 제약
+- **문제**: 다중 키 명령어는 같은 슬롯의 키만 사용 가능
+- **해결 방법**:
+  ```bash
+  # ❌ 에러 발생
+  MGET user:1000:name user:2000:name
+  
+  # ✅ 해시 태그 사용
+  MGET user:{1000}:name user:{2000}:name
+  
+  # ✅ 파이프라인 사용
+  pipeline = redis_cluster.pipeline()
+  pipeline.get("user:1000:name")
+  pipeline.get("user:2000:name")
+  pipeline.execute()
+  ```
+
+#### Resharding 시 주의점
+- **과정**: 슬롯을 한 노드에서 다른 노드로 이동
+- **주의사항**:
+  - **성능 영향**: 대량 데이터 이동 시 네트워크 부하
+  - **일관성**: 이동 중인 슬롯의 데이터 접근 제한
+  - **순서**: 한 번에 하나의 슬롯씩 이동
+  - **모니터링**: `redis-cli --cluster reshard` 진행 상황 확인
+
+#### 클러스터 모니터링 명령어
+```bash
+# 클러스터 정보 확인
+redis-cli --cluster info 127.0.0.1:7000
+
+# 슬롯 분포 확인
+redis-cli --cluster slots 127.0.0.1:7000
+
+# 노드 상태 확인
+redis-cli --cluster nodes 127.0.0.1:7000
+
+# Resharding 진행
+redis-cli --cluster reshard 127.0.0.1:7000
+```
+
 --- 
 --- 
 

@@ -82,6 +82,82 @@ Redis는 **Lazy Expiration**과 **Active Expiration**을 혼합 사용한다.
   - 배치 크기 조정 
     - Redis 설정에서 Active Expiration 빈도 조절
 
+### TTL Storm 대응 전략
+
+#### 1. Active Expiration 부하 완화
+```bash
+# redis.conf 설정
+# Active Expiration 빈도 조절
+hz 10                    # 기본값 10, 1-500 범위
+active-expire-effort 10  # 기본값 10, 1-10 범위 (높을수록 적극적)
+
+# CPU 사용량 제한
+maxmemory-policy allkeys-lru  # 메모리 부족 시 즉시 제거
+```
+
+#### 2. 만료 시간 랜덤화 (Expiration Jitter)
+```python
+import random
+
+# 방법 1: 기본 TTL + 랜덤 오프셋
+def set_with_jitter(key, value, base_ttl=3600, jitter_range=300):
+    jitter = random.randint(-jitter_range, jitter_range)
+    actual_ttl = base_ttl + jitter
+    redis_client.setex(key, actual_ttl, value)
+
+# 방법 2: 키별 고유 오프셋
+def set_with_hash_jitter(key, value, base_ttl=3600, jitter_range=600):
+    # 키의 해시값으로 일관된 오프셋 생성
+    hash_value = hash(key) % (jitter_range * 2 + 1)
+    jitter = hash_value - jitter_range
+    actual_ttl = base_ttl + jitter
+    redis_client.setex(key, actual_ttl, value)
+
+# 방법 3: 시간대별 분산
+def set_with_time_based_jitter(key, value, base_ttl=3600):
+    import time
+    current_minute = int(time.time() / 60)
+    jitter = (current_minute % 10) * 60  # 0~9분 분산
+    actual_ttl = base_ttl + jitter
+    redis_client.setex(key, actual_ttl, value)
+```
+
+#### 3. 키워드 암기 포인트
+- **TTL Storm**: 동시 만료로 인한 CPU Spike
+- **Active Expiration**: 백그라운드 주기적 만료 처리
+- **Expiration Jitter**: 만료 시간 랜덤화
+- **hz 설정**: Active Expiration 빈도 조절
+- **active-expire-effort**: 만료 처리 강도 조절
+
+#### 4. 실무 적용 예시
+```bash
+# 세션 관리 시 TTL Storm 방지
+# ❌ 문제가 되는 패턴
+SET session:user1 "data" EX 3600
+SET session:user2 "data" EX 3600
+SET session:user3 "data" EX 3600
+
+# ✅ 개선된 패턴 (랜덤 오프셋)
+SET session:user1 "data" EX 3600
+SET session:user2 "data" EX 3650
+SET session:user3 "data" EX 3700
+
+# ✅ 더 나은 패턴 (해시 기반 일관된 분산)
+SET session:user1 "data" EX 3620  # user1의 해시값 기반
+SET session:user2 "data" EX 3680  # user2의 해시값 기반
+SET session:user3 "data" EX 3640  # user3의 해시값 기반
+```
+
+#### 5. 모니터링 및 감지
+```bash
+# TTL Storm 감지 방법
+# 1. INFO 명령어로 만료 통계 확인
+INFO stats | grep expired_keys
+
+# 2. 모니터링 도구로 CPU Spike 감지
+# 3. 만료 키 수 추이 그래프 확인
+```
+
 ---
 
 ## 2️⃣ Eviction (메모리 관리 정책)
