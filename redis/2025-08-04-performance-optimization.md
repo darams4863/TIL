@@ -20,9 +20,11 @@ tags:
 4. 대량 처리 
 5. 트랜젝션 & 원자적 처리 
 6. 캐시 전략
+7. 모니터링 & 튜닝
 ---
 
 ## 1️⃣ 자료구조 최적화
+의도에 맞는 적절한 자료구조로 성능을 최적화 할 수 있다.
 
 ### 자료구조 선택 기준
 ```python
@@ -65,7 +67,7 @@ redis.hset("request:123", "status", "processing", "worker", "worker-abc")
 ---
 
 ## 2️⃣ 네트워크 왕복 최소화
-
+- 불필요한 네트워크 왕복을 최소화 하면 성능이 좋아진다.
 ### Pipeline 사용 (가장 중요한 최적화)
 ```python
 # ❌ 비효율적: 개별 명령어 (현재 프로젝트의 기존 방식)
@@ -427,6 +429,11 @@ async def update_request_status_with_watch(request_idx: str, new_status: str):
 ---
 
 ## 6️⃣ 캐시 전략
+- Redis를 캐시로 사용할 때는 데이터 일관성과 성능을 균형 있게 유지해야 합니다.
+대표적으로 세 가지 캐시 전략을 씁니다.
+    - Cache-Aside (Lazy Loading)
+    - Write-Through
+    - Write-Behind
 
 ### Cache-Aside (Lazy Loading)
 가장 일반적인 패턴으로, 필요할 때만 캐시에 데이터를 로드합니다.
