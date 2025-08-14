@@ -1,6 +1,6 @@
 ---
 title: "Dockerfile 작성법 & 이미지 최적화 기법"
-date: 2025-08-07
+date: 2025-08-13
 categories:
   - docker
 tags:
