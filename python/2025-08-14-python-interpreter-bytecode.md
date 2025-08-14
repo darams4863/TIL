@@ -6,6 +6,7 @@ categories:
 tags:
   - interpreter
   - bytecode
+  - gil
   - ast
   - pvm
   - cpython
@@ -229,6 +230,32 @@ dis.dis(example)
 #               RETURN_VALUE
 #               └─ sum 함수의 반환값을 이 함수의 결과로 반환합니다
 ``` 
+
+
+#### GIL(Global Interpreter Lock)이란?
+- CPython의 메모리 관리 안전성을 보장하기 위해 도입된 락
+    - CPython의 Garbage Collection(GC)는 객체의 메모리를 관리할 떄 **레퍼런스 카운팅**(reference counting)을 기본 방식으로 사용(즉, 각 객체는 내부적으로 "지금 몇 개의 변수가 나를 참조하고 있는가"를 숫자로 가지고 있는다)한다.
+    - 이때 멀티스레드 환경에서 동시에 레퍼런스 카운트를 조작하면, 동시에 레퍼런스 카운트를 한쪽 스레드에서는 +1, 한쪽 스레드에서는 -1을 하면 `race condition`(경쟁 상태)가 발생 가능하게 되고, 잘못된 reference count를 갖게되고, 메모리 누수 또는 조기 해제(crash)가 나게된다. 
+    - 따라서 이러한 문제점에 의해 CPython은 한번에 하나의 스레드만 파이썬 바이트코드를 실행하도록 강제하는 전역 락(GIL)을 도입했다.
+    - 즉, GIL 덕분에 reference count 변경은 항상 안전하게 작동하지만, 모든 바이트코드 실행은 GIL을 획득한 스레드만 가능하게 되어 멀티 스레드 환경에서 병렬처리가 불가하다  
+- 한 번에 하나의 스레드만 Python 바이트코드를 실행할 수 있게 제한함
+- 즉, 멀티스레드를 사용해도 CPU 병렬 실행이 불가능함
+- 왜 존재할까?
+	- CPython의 레퍼런스 카운팅 기반 GC는 thread-safe하지 않기 때문
+	- GIL이 없다면 동시에 객체를 참조/해제하는 과정에서 충돌 발생 가능
+- GIL의 문제점
+    - 멀티스레드로 CPU-bound 작업 처리 시 성능 저하
+    - 특히 머신러닝, 대규모 수치 연산 등 CPU 연산이 많은 작업에서 병목 발생
+- 우회 방법 
+
+|상황|우회 방법|설명|
+|----------------|----------------|----------------------------|
+|CPU-bound|multiprocessing|프로세스 단위로 병렬 실행 (GIL 무효)|
+|I/O-bound|asyncio, aiohttp|GIL 영향 거의 없음 (비동기 처리)|
+|특수한 경우|Cython, Numba|GIL 해제하고 네이티브 코드 실행|
+|아예 다른 인터프리터|Jython, IronPython 등|GIL 없음 (단, 생태계 제약 있음)
+
+
 
 ### PVM의 역할
 - 바이트코드 로딩: 컴파일 된 .pyc 파일을 읽음  
