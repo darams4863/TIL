@@ -14,11 +14,44 @@ tags:
 
 # __init__ vs __new__, 객체 생성
 
+## 0. 매직 메서드란? 
+- 파이썬의 매직 메서드는 `__이름__` 형식처럼 앞뒤로 밑줄 2개가 붙은 특수 메서드로, 클래스가 파이썬 내장 동작을 오버라이드(/내장 동작을 클래스가 커스터마이징) 할 수 있도록 해주는 특수한 이름의 메서드들이다. 
+  - 예: `__init__(생성자)`, `__len__(len() 호출 시 실행)`, `__str__(str() 또는 print() 호출 시 문자열로 변환)`,   `__getitem__(객체에서 obj[0]처럼 인덱스로 접근할 때 실행)` 
+  - 예를 들어 __str__은 print(obj) 시 사람이 읽기 쉬운 출력값을 지정할 수 있고, __getitem__은 obj[key] 방식으로 인덱싱 가능하게 해준다. 실무에서는 사용자 설정 객체를 dict처럼 다루기 위해 __getitem__, __setitem__을 사용하거나, 디버깅 편의성을 위해 __repr__을 정의할 수도 있다.
+- 이런 메서드들을 오버라이딩하면:
+  - 파이썬 내장함수 len(), str(), abs() 등의 동작을 나의 객체에 맞게 바꿀 수 있다. 즉 객체를 파이썬스럽게 다룰 수 있게 하는 방법의 핵심이다. 
+  - 예: 
+  ```python
+  class Settings:
+    def __init__(self):
+        self._data = {"host": "localhost", "port": 8080}
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def __setitem__(self, key, value):
+        self._data[key] = value
+
+  s = Settings()
+  print(s["host"])  # localhost
+  s["host"] = "127.0.0.1"
+  print(s["host"])  # 127.0.0.1
+  ```
+
 ## 1. __init__ vs __new__ 기본 개념
+- 두 메서드는 **모두 인스턴스를 생성할 떄 호출되는 매직 메서드**이지만, 역할과 실행 시점이 완전히 다르다. 
 
 ### 핵심 차이점
-- **`__new__`**: 객체를 **생성**하는 메서드 (constructor)
-- **`__init__`**: 객체를 **초기화**하는 메서드 (initializer)
+- **`__new__`**: 
+  - 인스턴스를 **생성**하는 메서드이다 (constructor)
+  - 호출 시점: 객체가 생성되기 전에 호출 
+  - 리턴값: 인스턴스(보통 `super().__new__`)를 리턴해야한다 
+  - 정의 위치: 보통 object를 상속받은 클래스 
+  - 사용 목적: 싱글톤, 불변 객체, 메타 클래스 등 
+- **`__init__`**: 
+  - 인스턴스를 **초기화**하는 메서드이다 (initializer)
+  - 호출 시점: 객체가 생성된 후에 호출 
+  - 리턴값: 아무 것도 리턴하지 않음 (None)
 
 ### 객체 생성 흐름
 ```python
@@ -202,7 +235,233 @@ del node2
 gc.collect()
 ```
 
-## 6. 실무 활용 사례
+## 6. 메모리 최적화 기법
+
+### __slots__를 사용한 메모리 최적화
+```python
+import sys
+
+# 일반 클래스 (__dict__ 사용)
+class WithDict:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+# __slots__ 사용 클래스
+class WithSlots:
+    __slots__ = ['x', 'y']
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+# 메모리 사용량 비교
+a = WithDict(1, 2)
+b = WithSlots(1, 2)
+
+print(f"WithDict 메모리: {sys.getsizeof(a)} bytes")    # 예: 56 bytes
+print(f"WithSlots 메모리: {sys.getsizeof(b)} bytes")   # 예: 40 bytes
+print(f"메모리 절약: {sys.getsizeof(a) - sys.getsizeof(b)} bytes")
+
+# __slots__ 사용 시 장점
+# 1. 메모리 사용량 감소 (인스턴스 __dict__ 제거)
+# 2. 속성 접근 속도 향상
+# 3. 동적 속성 추가 방지 (런타임 에러)
+```
+
+### is vs == 비교와 객체 ID
+```python
+# 리스트 비교 예시
+a = [1, 2, 3]
+b = [1, 2, 3]
+
+print(f"a == b: {a == b}")    # True - 값 비교
+print(f"a is b: {a is b}")    # False - 객체 ID 다름
+print(f"a의 id: {id(a)}")
+print(f"b의 id: {id(b)}")
+
+# 작은 정수는 인터닝 (interning)
+x = 100
+y = 100
+print(f"x is y (100): {x is y}")    # True - 작은 정수는 인터닝
+
+# 큰 정수는 인터닝 대상 아님
+x = 1000
+y = 1000
+print(f"x is y (1000): {x is y}")  # False - 큰 정수는 인터닝 안됨
+
+# 문자열 인터닝
+s1 = "hello"
+s2 = "hello"
+print(f"s1 is s2: {s1 is s2}")     # True - 문자열 리터럴은 인터닝
+```
+
+### id()와 객체 재사용 (Interning)
+```python
+# CPython의 객체 재사용 메커니즘
+print("=== 작은 정수 인터닝 ===")
+for i in range(-5, 257):
+    a = i
+    b = i
+    if a is not b:
+        print(f"인터닝 안됨: {i}")
+
+print("\n=== 문자열 인터닝 ===")
+# 컴파일 타임에 결정되는 문자열은 인터닝
+s1 = "hello"
+s2 = "hello"
+print(f"리터럴 문자열: {s1 is s2}")  # True
+
+# 런타임에 생성된 문자열은 인터닝 안됨
+s3 = "".join(['h', 'e', 'l', 'l', 'o'])
+print(f"동적 생성 문자열: {s1 is s3}")  # False
+
+# 하지만 값은 같음
+print(f"값 비교: {s1 == s3}")  # True
+```
+
+### 참조 카운팅 내부 구조
+```python
+import sys
+import ctypes
+
+# CPython의 참조 카운팅 내부 구조
+def get_ref_count_details(obj):
+    """객체의 참조 카운팅 상세 정보"""
+    # PyObject 구조체의 ob_refcnt 필드 접근
+    # 주의: 이는 CPython 구현에 의존적이며 위험할 수 있음
+    try:
+        # ctypes를 사용한 내부 구조 접근 (교육 목적)
+        ref_count = sys.getrefcount(obj)
+        obj_id = id(obj)
+        obj_type = type(obj).__name__
+        
+        return {
+            'ref_count': ref_count,
+            'object_id': obj_id,
+            'type': obj_type,
+            'size': sys.getsizeof(obj)
+        }
+    except Exception as e:
+        return f"에러: {e}"
+
+# 참조 카운팅 상세 분석
+x = [1, 2, 3]
+print("=== 참조 카운팅 상세 분석 ===")
+print(f"객체 정보: {get_ref_count_details(x)}")
+
+# 참조 추가/제거 시 변화
+y = x
+print(f"참조 추가 후: {get_ref_count_details(x)}")
+
+del y
+print(f"참조 제거 후: {get_ref_count_details(x)}")
+
+# CPython 내부 구조 설명
+print("\n=== CPython 내부 구조 ===")
+print("PyObject 구조체:")
+print("  - ob_refcnt: 참조 카운트 (Py_ssize_t)")
+print("  - ob_type: 타입 객체 포인터")
+print("  - ob_data: 실제 데이터")
+```
+
+### 약한 참조와 순환 참조 해결
+```python
+import weakref
+import gc
+
+# 약한 참조를 사용한 캐시 구현
+class Cache:
+    def __init__(self):
+        # WeakValueDictionary: 키가 약한 참조로 관리됨
+        self._cache = weakref.WeakValueDictionary()
+    
+    def get(self, key):
+        return self._cache.get(key)
+    
+    def set(self, key, value):
+        self._cache[key] = value
+    
+    def clear(self):
+        self._cache.clear()
+    
+    def size(self):
+        return len(self._cache)
+
+# 사용 예시
+cache = Cache()
+
+# 객체 생성 및 캐시 저장
+class ExpensiveObject:
+    def __init__(self, name):
+        self.name = name
+        print(f"{name} 객체 생성됨")
+    
+    def __del__(self):
+        print(f"{name} 객체 소멸됨")
+
+# 캐시에 객체 저장
+obj1 = ExpensiveObject("첫번째")
+obj2 = ExpensiveObject("두번째")
+
+cache.set("obj1", obj1)
+cache.set("obj2", obj2)
+
+print(f"캐시 크기: {cache.size()}")  # 2
+
+# 객체 참조 제거
+del obj1
+gc.collect()  # 가비지 컬렉션 실행
+
+print(f"obj1 제거 후 캐시 크기: {cache.size()}")  # 1
+print(f"obj2 여전히 존재: {cache.get('obj2')}")
+
+# 약한 참조의 장점
+print("\n=== 약한 참조 장점 ===")
+print("1. 메모리 누수 방지: 참조된 객체가 없어지면 자동 제거")
+print("2. 순환 참조 해결: 약한 참조는 참조 카운트에 포함되지 않음")
+print("3. 캐시 구현: 메모리 부족 시 자동으로 오래된 객체 제거")
+
+# WeakRef 사용 예시
+class Observer:
+    def __init__(self, name):
+        self.name = name
+    
+    def update(self, data):
+        print(f"{self.name}이 {data}를 받았습니다")
+
+class Subject:
+    def __init__(self):
+        # 약한 참조로 옵저버 관리
+        self._observers = weakref.WeakSet()
+    
+    def add_observer(self, observer):
+        self._observers.add(observer)
+    
+    def notify(self, data):
+        # 약한 참조로 인해 이미 소멸된 옵저버는 자동 제거됨
+        for observer in self._observers:
+            observer.update(data)
+
+# 사용 예시
+subject = Subject()
+observer1 = Observer("옵저버1")
+observer2 = Observer("옵저버2")
+
+subject.add_observer(observer1)
+subject.add_observer(observer2)
+
+print("=== 옵저버 패턴 테스트 ===")
+subject.notify("데이터1")
+
+# observer1 제거
+del observer1
+gc.collect()
+
+print("observer1 제거 후:")
+subject.notify("데이터2")  # observer2만 알림
+```
+
+## 7. 실무 활용 사례
 
 ### Singleton 패턴 구현
 ```python
@@ -254,7 +513,68 @@ except Exception as e:
     print(f"에러: {e}")
 ```
 
-## 7. 면접 질문 & 답변
+## 8. 면접 질문 & 답변
+
+### Q: 파이썬의 매직 메서드란 무엇이고, 실무에서 사용해본 적이 있나요?
+**A:** 
+
+```text
+파이썬의 매직 메서드는 __init__, __str__처럼 앞뒤로 밑줄 2개가 붙은 특수 메서드로, 클래스가 파이썬 내장 동작을 오버라이드할 수 있도록 해줍니다.
+예를 들어 __str__은 print(obj) 시 사람이 읽기 쉬운 출력값을 지정할 수 있고, __getitem__은 obj[key] 방식으로 인덱싱 가능하게 해줍니다.
+실무에서는 사용자 설정 객체를 dict처럼 다루기 위해 __getitem__, __setitem__을 사용하거나, 디버깅 편의성을 위해 __repr__을 정의해본 경험이 있습니다.
+```
+
+### Q: __str__과 __repr__의 차이는 무엇인가요?
+**A:** 
+
+```python
+# __str__은 사용자 친화적인 출력용이고, __repr__은 개발자/디버깅용 표현입니다.
+# print()는 __str__을 먼저 호출하고, 없으면 __repr__을 fallback으로 사용합니다.
+# 반대로 repr()은 항상 __repr__을 호출합니다.
+
+def __str__(self):    # 사용자에게 보이게
+    return "사용자 이름: 다예"
+
+def __repr__(self):   # 개발자 디버깅 용도
+    return "User(name='다예')"
+``` 
+
+
+### Q: __getitem__과 __iter__, __len__을 같이 쓰면 어떤 이점이 있을까요?
+**A:** 
+"이 세 가지 메서드를 함께 구현하면 컨테이너형 객체처럼 만들 수 있어 for, len(), [] 접근이 모두 가능해집니다.
+파이썬 내장 자료형처럼 동작하게 되어, 사용성과 테스트가 훨씬 좋아집니다."
+
+### Q: __eq__, __hash__는 언제 함께 재정의해야 하나요?
+**A:** 
+
+```text 
+__eq__만 재정의하면 == 비교는 가능하지만, 객체를 set이나 dict의 key로 쓸 수 없습니다.
+이때 __hash__도 함께 재정의해서 두 객체가 같다면 해시값도 같게 해줘야 합니다.
+즉, ==가 True면 hash()도 같아야 set, dict에서 의도대로 동작합니다.
+```
+
+### Q: __eq__만 있고 __hash__가 없는 객체를 set에 넣으면 어떻게 되나요?
+**A:** 
+
+```text 
+__hash__가 없으면 해당 객체는 mutable로 간주되어 unhashable type 에러가 납니다.
+따라서 set, dict의 key로 쓸 수 없습니다.
+```
+
+### Q:매직 메서드를 활용해 dict처럼 동작하는 설정 클래스를 구현해보세요.
+**A:** 
+```python
+class Settings:
+    def __init__(self):
+        self._data = {"env": "prod", "debug": False}
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def __setitem__(self, key, value):
+        self._data[key] = value
+```
 
 ### Q: __init__과 __new__의 차이점을 설명해주세요.
 **A:** 
@@ -284,6 +604,33 @@ except Exception as e:
 2. **가비지 컬렉션**: `gc.collect()`로 주기적 정리
 3. **참조 구조 설계**: 순환 참조가 발생하지 않도록 아키텍처 설계
 4. **컨텍스트 매니저**: `with` 문으로 리소스 자동 정리
+
+### Q: `is`와 `==`의 차이점을 설명해주세요.
+**A:** 
+- **`==`**: **값 비교**를 수행합니다. 두 객체의 내용이 같은지 확인합니다.
+- **`is`**: **객체 ID 비교**를 수행합니다. 두 변수가 같은 메모리 위치를 가리키는지 확인합니다.
+
+**예시**:
+```python
+a = [1, 2, 3]
+b = [1, 2, 3]
+print(a == b)  # True (값이 같음)
+print(a is b)  # False (다른 객체)
+
+# 작은 정수는 인터닝으로 인해 같은 객체
+x = 100
+y = 100
+print(x is y)  # True
+```
+
+### Q: `__slots__`를 언제 사용하나요?
+**A:** 
+1. **메모리 최적화가 중요한 경우**: 대량의 객체를 생성할 때
+2. **속성 접근 속도 향상이 필요한 경우**: 자주 접근하는 속성이 많을 때
+3. **동적 속성 추가를 방지하고 싶은 경우**: 클래스 구조를 고정하고 싶을 때
+4. **제한된 메모리 환경**: 임베디드 시스템이나 서버 환경
+
+**주의사항**: 상속 시 부모 클래스의 `__slots__`와 충돌할 수 있으며, 동적 속성 추가가 불가능합니다.
 
 ---
 
