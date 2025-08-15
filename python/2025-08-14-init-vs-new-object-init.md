@@ -44,21 +44,94 @@ tags:
 ### 핵심 차이점
 - **`__new__`**: 
   - 인스턴스를 **생성**하는 메서드이다 (constructor)
-  - 호출 시점: 객체가 생성되기 전에 호출 
+  - 호출 시점: 클래스 호출 시 가장 먼저 호출 -> 객체가 생성되기 전에 호출 
   - 리턴값: 인스턴스(보통 `super().__new__`)를 리턴해야한다 
-  - 정의 위치: 보통 object를 상속받은 클래스 
-  - 사용 목적: 싱글톤, 불변 객체, 메타 클래스 등 
+  - 주 사용처: 불변 객체(예: tuple, str)의 커스터마이징, 싱글톤 패턴
+  - 정적 메서드인가: 예 (`@staticmethod` 처럼 동작함. 즉, 클래스 내부에서 정의되지만 클래스나 인스턴스와 무관하게 동작하는 메서드이고, 일반 메서드와 달리 self나 cls를 받지 않는다. 클래스 소속이긴 하지만, 순수한 함수처럼 사용된다. 선언할 때 @staticmethod 데코레이터를 사용한다)
 - **`__init__`**: 
   - 인스턴스를 **초기화**하는 메서드이다 (initializer)
-  - 호출 시점: 객체가 생성된 후에 호출 
+  - 호출 시점: `__new__`가 객체를 반환한 다음 -> 객체가 생성된 후에 호출 
   - 리턴값: 아무 것도 리턴하지 않음 (None)
+  - 주 사용처: 일반적인 인스턴스 초기화 
+  - 정적 메서드인가: 아니오 (`self`를 인자로 받음)
+- 정리: 
 
-### 객체 생성 흐름
 ```python
-# 객체 생성 시 호출 순서
-1. __new__(cls, *args, **kwargs) → 객체 생성 및 반환
-2. __init__(self, *args, **kwargs) → 객체 초기화
+"""
+__new__는 인스턴스를 생성하는 메서드,
+__init__은 생성된 인스턴스를 초기화하는 메서드입니다.
+
+__new__는 클래스 호출 시 가장 먼저 실행되며, 반드시 인스턴스를 반환해야 하고,
+__init__은 __new__가 반환한 인스턴스를 받아 초기화 작업을 수행합니다.
+
+주로 __init__만 정의해서 사용하지만, 불변 객체를 커스터마이징하거나
+싱글톤처럼 인스턴스 생성을 제어하고자 할 때는 __new__를 오버라이드하기도 합니다.
+"""
+
+class MyClass:
+    def __new__(cls, *args, **kwargs):
+        print("📦 __new__ 호출 - 인스턴스 생성")
+        instance = super().__new__(cls)
+        return instance
+    
+    def __init__(self, value):
+        print("🔧 __init__ 호출 - 인스턴스 초기화")
+        self.value = value
+
+obj = MyClass(42)
+# 출력 순서:
+# 📦 __new__ 호출 - 인스턴스 생성
+# 🔧 __init__ 호출 - 인스턴스 초기화
 ```
+
+#### 일반 메서드 vs 클래스 메서드 vs 정적 메서드
+- 정리: 
+
+|종류|첫 번째 인자|특징|대표 용도|
+|---------|--------|--------------|---------------|
+|일반 메서드|self|인스턴스 메서드|객체 상태 변경|
+|클래스 메서드|cls|클래스 자체를 다룸|팩토리 메서드 등|
+|정적 메서드|없음|독립적 로직 처리|유틸성 함수|
+
+- 예: 
+
+```python
+class MyClass:
+
+    def instance_method(self):
+        # ✅ self: 인스턴스 자신을 참조 → 객체 상태에 접근하거나 수정 가능
+        print("나는 인스턴스 메서드입니다. self로 호출됨")
+
+    @classmethod
+    def class_method(cls):
+        # ✅ cls: 클래스 자체를 참조 → 클래스 속성 변경/접근 시 사용
+        print("나는 클래스 메서드입니다. cls로 호출됨")
+
+    @staticmethod
+    def static_method():
+        # ✅ self나 cls 없음 → 독립적인 유틸성 로직
+        print("나는 정적 메서드입니다. self나 cls 없이 호출됨")
+
+obj = MyClass()
+
+obj.instance_method()     # 👉 인스턴스를 통해 호출 (self 자동 전달됨)
+obj.class_method()        # 👉 인스턴스를 통해 호출 (cls 자동 전달됨)
+obj.static_method()       # 👉 인스턴스를 통해 호출 (인자 없음)
+
+MyClass.class_method()    # 👉 클래스로도 호출 가능 (cls 자동 전달)
+MyClass.static_method()   # 👉 클래스로 호출 (완전한 독립 메서드)
+
+# 언제 어떤 것을 사용? 
+# •	인스턴스 메서드는 해당 인스턴스의 상태(속성)를 읽거나 변경할 때 사용됩니다.
+# •	클래스 메서드는 인스턴스를 새로 생성하거나, 클래스 전역 설정 등 클래스 자체에 관련된 동작이 필요할 때 사용합니다.
+# •	정적 메서드는 클래스나 인스턴스와 무관하게 독립적으로 동작하는 헬퍼 함수를 정의할 때 사용합니다.
+```
+
+
+여기부터 ~~ 
+4. 도 확인 필요 실무 예시 (깊은 / 얕은 복사)
+
+
 
 ## 2. __new__ 메서드 상세
 
@@ -134,13 +207,95 @@ print(user1)  # User(name=김철수, age=25, email=김철수@example.com)
 ```
 
 ## 4. Immutable vs Mutable 객체
+- Python에서는 객체가 생성된 후 내부 상태를 변경할 수 있으면 mutable, 그렇지 않으면 immutable로 구분한다. 리스트나 딕셔너리는 mutable, 정수나 문자열은 immutable이다. 
+
+**함수 인자 전달 시 핵심 포인트:**
+- Python은 함수 인자 전달 시 **'값'이 아닌 '참조(객체 주소)'를 전달**한다
+- 변수 이름은 객체를 '가리키는' 참조일 뿐이다
+
+**Mutable vs Immutable의 함수 내 동작 차이:**
+
+```python
+# Mutable 객체: 리스트 예시
+def add_item(my_list):
+    my_list.append(4)  # 원본 객체 직접 수정
+
+lst = [1, 2, 3]
+print(f"Before: id={id(lst)} → {lst}")
+add_item(lst)
+print(f"After: id={id(lst)} → {lst}")
+# 출력: Before: id=140234567890 → [1, 2, 3]
+#       After: id=140234567890 → [1, 2, 3, 4]  # 같은 객체, 내용만 변경
+
+# Immutable 객체: 정수 예시  
+def add_num(n):
+    n += 1  # 새로운 객체 생성하여 n에 할당
+    print(f"In function: id={id(n)}, value={n}")
+
+num = 10
+print(f"Before: id={id(num)} → {num}")
+add_num(num)
+print(f"After: id={id(num)} → {num}")
+# 출력: Before: id=140234567890 → 10
+#       In function: id=140234567891 → 11  # 함수 내에서만 다른 객체
+#       After: id=140234567890 → 10        # 원본은 그대로
+```
+
+**메모리 관점에서의 차이점:**
+
+| 구분 | Mutable 객체 (list, dict, set) | Immutable 객체 (int, str, tuple) |
+|------|--------------------------------|----------------------------------|
+| 함수 인자로 전달 시 | 같은 객체를 공유함 | 새로운 객체가 만들어짐 |
+| 함수 내부에서 값 변경 시 | 원본도 변경됨 (side effect) | 원본은 그대로, 복사된 객체만 변경됨 |
+| 메모리 주소 | 함수 안/밖 모두 동일 | 함수 안에서만 주소가 다름 |
+
+**사이드 이펙트가 문제인 이유:**
+1. **예측 불가능**: 함수 실행 결과가 외부 상태에 따라 달라짐
+2. **디버깅 어려움**: 함수 외부 값 변화의 원인 추적이 어려움  
+3. **재사용성 저하**: 같은 입력에 대해 다른 결과 가능
+4. **병렬 처리 위험**: 외부 상태 공유로 인한 race condition
+
+**실무에서 자주 겪는 사례와 해결책:**
+
+```python
+# 문제 상황: 전역 mutable 객체 공유
+def add_header(headers):
+    headers['Authorization'] = 'Bearer xyz'
+
+# 주의가 필요한 코드
+common_headers = {}
+add_header(common_headers)
+# → 이후 다른 요청에서도 'Authorization'이 의도치 않게 포함될 수 있음
+
+# 해결책 1: deepcopy 사용
+import copy
+def add_header_safe(headers):
+    headers_copy = copy.deepcopy(headers)
+    headers_copy['Authorization'] = 'Bearer xyz'
+    return headers_copy
+
+# 해결책 2: 슬라이싱으로 얕은 복사 (1차원만)
+def add_header_safe2(headers):
+    headers_copy = headers[:]  # 리스트의 경우
+    headers_copy.append('new_item')
+    return headers_copy
+
+# 해결책 3: 새로운 객체 생성
+def add_header_safe3(headers):
+    return {**headers, 'Authorization': 'Bearer xyz'}  # 딕셔너리 병합
+```
+
+**핵심 정리:**
+- **Immutable 객체 사용**: 사이드 이펙트 방지에 효과적
+- **Mutable 객체**: 함수 내에서 복사본을 만들어 조작하는 것이 안전
+- **deepcopy vs shallow copy**: 중첩된 구조는 deepcopy, 단순 구조는 슬라이싱이나 생성자 사용
 
 ### Immutable 객체
 - **한 번 생성되면 값 변경 불가**
 - **해시 가능** → dict key, set 요소로 사용 가능
 - **스레드 안전** → 동기화 비용 없음
+- **Immutable 객체 종류**:
 
-#### Immutable 객체 종류
 ```python
 # 기본 타입
 x = 42          # int
@@ -158,8 +313,8 @@ my_set = {x, y, z}  # set 요소로 사용 가능
 - **생성 후 내부 상태 변경 가능**
 - **해시 불가능** → dict key, set 요소로 사용 불가
 - **스레드 안전하지 않음** → 동기화 필요
+- **Mutable 객체 종류**:
 
-#### Mutable 객체 종류
 ```python
 # 기본 타입
 my_list = [1, 2, 3]      # list
