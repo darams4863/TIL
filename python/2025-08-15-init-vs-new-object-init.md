@@ -1,6 +1,6 @@
 ---
 title: "__init__ vs __new__, 객체 생성"
-date: 2025-08-14
+date: 2025-08-15
 categories:
   - python
 tags:
@@ -9,7 +9,6 @@ tags:
   - object-creation
   - immutable
   - mutable
-  - memory-management
 ---
 
 # __init__ vs __new__, 객체 생성
@@ -155,9 +154,23 @@ class Singleton:
 
 # 사용 예시
 s1 = Singleton("첫번째")
-s2 = Singleton("두번째")
+s2 = Singleton("두번째") # 덮어쓰기됨 
 print(s1 is s2)  # True - 같은 객체
 print(s1.name)   # "두번째" - 마지막 __init__ 호출 결과
+
+"""
+첫 번째 호출
+ ┌────────────┐
+ │ __new__    │ → Singleton 객체 생성
+ │ __init__   │ → name = "첫번째"
+ └────────────┘
+
+두 번째 호출
+ ┌────────────┐
+ │ __new__    │ → 기존 객체 반환
+ │ __init__   │ → name = "두번째" ← 덮어쓰기!
+ └────────────┘
+"""
 ```
 
 ### Immutable 객체에서의 활용
@@ -390,235 +403,12 @@ del node2
 gc.collect()
 ```
 
-## 6. 메모리 최적화 기법
-
-### __slots__를 사용한 메모리 최적화
-```python
-import sys
-
-# 일반 클래스 (__dict__ 사용)
-class WithDict:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-
-# __slots__ 사용 클래스
-class WithSlots:
-    __slots__ = ['x', 'y']
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-
-# 메모리 사용량 비교
-a = WithDict(1, 2)
-b = WithSlots(1, 2)
-
-print(f"WithDict 메모리: {sys.getsizeof(a)} bytes")    # 예: 56 bytes
-print(f"WithSlots 메모리: {sys.getsizeof(b)} bytes")   # 예: 40 bytes
-print(f"메모리 절약: {sys.getsizeof(a) - sys.getsizeof(b)} bytes")
-
-# __slots__ 사용 시 장점
-# 1. 메모리 사용량 감소 (인스턴스 __dict__ 제거)
-# 2. 속성 접근 속도 향상
-# 3. 동적 속성 추가 방지 (런타임 에러)
-```
-
-### is vs == 비교와 객체 ID
-```python
-# 리스트 비교 예시
-a = [1, 2, 3]
-b = [1, 2, 3]
-
-print(f"a == b: {a == b}")    # True - 값 비교
-print(f"a is b: {a is b}")    # False - 객체 ID 다름
-print(f"a의 id: {id(a)}")
-print(f"b의 id: {id(b)}")
-
-# 작은 정수는 인터닝 (interning)
-x = 100
-y = 100
-print(f"x is y (100): {x is y}")    # True - 작은 정수는 인터닝
-
-# 큰 정수는 인터닝 대상 아님
-x = 1000
-y = 1000
-print(f"x is y (1000): {x is y}")  # False - 큰 정수는 인터닝 안됨
-
-# 문자열 인터닝
-s1 = "hello"
-s2 = "hello"
-print(f"s1 is s2: {s1 is s2}")     # True - 문자열 리터럴은 인터닝
-```
-
-### id()와 객체 재사용 (Interning)
-```python
-# CPython의 객체 재사용 메커니즘
-print("=== 작은 정수 인터닝 ===")
-for i in range(-5, 257):
-    a = i
-    b = i
-    if a is not b:
-        print(f"인터닝 안됨: {i}")
-
-print("\n=== 문자열 인터닝 ===")
-# 컴파일 타임에 결정되는 문자열은 인터닝
-s1 = "hello"
-s2 = "hello"
-print(f"리터럴 문자열: {s1 is s2}")  # True
-
-# 런타임에 생성된 문자열은 인터닝 안됨
-s3 = "".join(['h', 'e', 'l', 'l', 'o'])
-print(f"동적 생성 문자열: {s1 is s3}")  # False
-
-# 하지만 값은 같음
-print(f"값 비교: {s1 == s3}")  # True
-```
-
-### 참조 카운팅 내부 구조
-```python
-import sys
-import ctypes
-
-# CPython의 참조 카운팅 내부 구조
-def get_ref_count_details(obj):
-    """객체의 참조 카운팅 상세 정보"""
-    # PyObject 구조체의 ob_refcnt 필드 접근
-    # 주의: 이는 CPython 구현에 의존적이며 위험할 수 있음
-    try:
-        # ctypes를 사용한 내부 구조 접근 (교육 목적)
-        ref_count = sys.getrefcount(obj)
-        obj_id = id(obj)
-        obj_type = type(obj).__name__
-        
-        return {
-            'ref_count': ref_count,
-            'object_id': obj_id,
-            'type': obj_type,
-            'size': sys.getsizeof(obj)
-        }
-    except Exception as e:
-        return f"에러: {e}"
-
-# 참조 카운팅 상세 분석
-x = [1, 2, 3]
-print("=== 참조 카운팅 상세 분석 ===")
-print(f"객체 정보: {get_ref_count_details(x)}")
-
-# 참조 추가/제거 시 변화
-y = x
-print(f"참조 추가 후: {get_ref_count_details(x)}")
-
-del y
-print(f"참조 제거 후: {get_ref_count_details(x)}")
-
-# CPython 내부 구조 설명
-print("\n=== CPython 내부 구조 ===")
-print("PyObject 구조체:")
-print("  - ob_refcnt: 참조 카운트 (Py_ssize_t)")
-print("  - ob_type: 타입 객체 포인터")
-print("  - ob_data: 실제 데이터")
-```
-
-### 약한 참조와 순환 참조 해결
-```python
-import weakref
-import gc
-
-# 약한 참조를 사용한 캐시 구현
-class Cache:
-    def __init__(self):
-        # WeakValueDictionary: 키가 약한 참조로 관리됨
-        self._cache = weakref.WeakValueDictionary()
-    
-    def get(self, key):
-        return self._cache.get(key)
-    
-    def set(self, key, value):
-        self._cache[key] = value
-    
-    def clear(self):
-        self._cache.clear()
-    
-    def size(self):
-        return len(self._cache)
-
-# 사용 예시
-cache = Cache()
-
-# 객체 생성 및 캐시 저장
-class ExpensiveObject:
-    def __init__(self, name):
-        self.name = name
-        print(f"{name} 객체 생성됨")
-    
-    def __del__(self):
-        print(f"{name} 객체 소멸됨")
-
-# 캐시에 객체 저장
-obj1 = ExpensiveObject("첫번째")
-obj2 = ExpensiveObject("두번째")
-
-cache.set("obj1", obj1)
-cache.set("obj2", obj2)
-
-print(f"캐시 크기: {cache.size()}")  # 2
-
-# 객체 참조 제거
-del obj1
-gc.collect()  # 가비지 컬렉션 실행
-
-print(f"obj1 제거 후 캐시 크기: {cache.size()}")  # 1
-print(f"obj2 여전히 존재: {cache.get('obj2')}")
-
-# 약한 참조의 장점
-print("\n=== 약한 참조 장점 ===")
-print("1. 메모리 누수 방지: 참조된 객체가 없어지면 자동 제거")
-print("2. 순환 참조 해결: 약한 참조는 참조 카운트에 포함되지 않음")
-print("3. 캐시 구현: 메모리 부족 시 자동으로 오래된 객체 제거")
-
-# WeakRef 사용 예시
-class Observer:
-    def __init__(self, name):
-        self.name = name
-    
-    def update(self, data):
-        print(f"{self.name}이 {data}를 받았습니다")
-
-class Subject:
-    def __init__(self):
-        # 약한 참조로 옵저버 관리
-        self._observers = weakref.WeakSet()
-    
-    def add_observer(self, observer):
-        self._observers.add(observer)
-    
-    def notify(self, data):
-        # 약한 참조로 인해 이미 소멸된 옵저버는 자동 제거됨
-        for observer in self._observers:
-            observer.update(data)
-
-# 사용 예시
-subject = Subject()
-observer1 = Observer("옵저버1")
-observer2 = Observer("옵저버2")
-
-subject.add_observer(observer1)
-subject.add_observer(observer2)
-
-print("=== 옵저버 패턴 테스트 ===")
-subject.notify("데이터1")
-
-# observer1 제거
-del observer1
-gc.collect()
-
-print("observer1 제거 후:")
-subject.notify("데이터2")  # observer2만 알림
-```
-
 ## 7. 실무 활용 사례
 
 ### Singleton 패턴 구현
+- 다중 스레드 환경에서도 DB 연결 자체는 1개만 유지하려고 `__new__`를 오버라이딩 해서 싱글톤 구현 
+- `__init__`은 매번 실행되지만, connection_string이 존재하지 않을 때만 내부 속성을 초기화해서 중복 초기화를 막음 
+- 실무에서 DB 연결처럼 무겁고 비용이 큰 리소스는 재사용이 핵심이므로, 이런 방식으로 싱글톤 패턴을 구현해서 사용한다 
 ```python
 class DatabaseConnection:
     _instance = None
@@ -642,11 +432,15 @@ class DatabaseConnection:
 ```
 
 ### Immutable Data Class
+- @dataclass(frozen=True)를 통해 불변 객체를 생성함으로써, 실수로 속성이 변경되는 걸 방지
+- 불변 객체는 동시성 환경에서 안전하고, 다른 곳에서 참조해도 Side Effect가 없음
+- 연산자 오버로딩 (`__add__`)을 통해 두 Point의 합도 새로운 객체로 리턴, 기존 객체는 그대로 유지
 ```python
 from dataclasses import dataclass
 from typing import Tuple
 
-@dataclass(frozen=True)  # frozen=True로 immutable 생성
+# @dataclass는 Python 표준 라이브러리인 dataclasses 모듈에 내장되어 있는 데코레이터로 클래스에 자동으로 __init__(), __repr__(), __eq__(), __hash__()를 자동으로 생성해준다 
+@dataclass(frozen=True)  # frozen=True로 설정하면 immutable 객체로 만들어준다, cf. order=True를 설정하면 비교 연산(<, >, <=, >=)을 지원해준다
 class Point:
     x: float
     y: float
@@ -668,7 +462,184 @@ except Exception as e:
     print(f"에러: {e}")
 ```
 
-## 8. 면접 질문 & 답변
+#### cf. with 구문 
+- with 구문은 리소스 해제를 자동화하는 문법으로, 파일, DB 연결, 락(lock), 소켓 등 "열면 닫아야 하는 것들"에 자주 사용된다 
+- 예: 
+```python
+with open("file.txt", "r") as f:
+    data = f.read()
+# f.close() 생략 가능. 자동으로 닫힘!
+
+# with 블록에 진입하면 __enter__()가 실행됨
+# 블록이 끝나면 자동으로 __exit__()가 실행되어 리소스를 정리함
+```
+
+## 8. 추가 매직 메서드
+
+### __del__ (소멸자 - Destructor)
+- 객체가 소멸될 때 호출되는 메서드로, 리소스 해제를 자동화할 수 있다
+- **주의**: 호출 시점이 예측 불가능하므로, 실무에서는 `with` 구문을 사용하는 것이 더 안정적이다
+- **실무/면접 포인트**: "가비지 컬렉션에 의존하지 않고 `with`를 사용해 안전하게 리소스를 관리하는 것이 더 안정적이다"
+
+```python
+class ResourceManager:
+    def __init__(self, name):
+        self.name = name
+        print(f"{name} 리소스 생성됨")
+    
+    def __del__(self):
+        print(f"{name} 리소스 소멸됨")
+        # 주의: 언제 호출될지 모름
+
+# 권장하지 않는 방식
+obj = ResourceManager("테스트")
+del obj  # __del__ 호출 시점 불확실
+
+# 권장하는 방식: with 구문 사용
+class SafeResourceManager:
+    def __enter__(self):
+        print("리소스 획득")
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        print("리소스 해제")
+
+with SafeResourceManager() as resource:
+    print("리소스 사용 중")
+# 블록 종료 시 자동으로 __exit__ 호출
+```
+
+### __contains__ (in 연산자)
+- `in` 연산자를 지원하기 위해 반드시 오버라이드해야 하는 메서드
+- 실무에서 커스텀 설정 클래스, 캐시 클래스 등을 구현할 때 유용하다
+
+```python
+class Config:
+    def __init__(self):
+        self._data = {"host": "localhost", "port": 8080, "debug": True}
+    
+    def __contains__(self, key):
+        return key in self._data
+    
+    def __getitem__(self, key):
+        return self._data[key]
+
+config = Config()
+print("host" in config)      # True
+print("database" in config)  # False
+print(config["host"])        # localhost
+```
+
+### __copy__, __deepcopy__ 커스터마이징
+- 사용자 정의 클래스의 얕은/깊은 복사 동작을 제어하는 메서드
+- 특히 mutable 객체를 포함하는 클래스에서는 `copy.deepcopy()`가 제대로 동작하도록 커스터마이징이 필요하다
+
+```python
+import copy
+
+class Container:
+    def __init__(self, data):
+        self.data = data
+    
+    def __copy__(self):
+        # 얕은 복사: 새로운 Container 객체 생성, data는 참조 공유
+        return Container(self.data)
+    
+    def __deepcopy__(self, memo):
+        # 깊은 복사: 새로운 Container 객체 생성, data도 깊은 복사
+        return Container(copy.deepcopy(self.data, memo))
+
+original = Container([1, 2, 3])
+shallow = copy.copy(original)
+deep = copy.deepcopy(original)
+
+original.data[0] = 999
+print(f"Original: {original.data}")  # [999, 2, 3]
+print(f"Shallow: {shallow.data}")    # [999, 2, 3] (참조 공유)
+print(f"Deep: {deep.data}")          # [1, 2, 3] (독립적)
+```
+
+### @dataclass 옵션 추가 설명
+
+#### order=True
+- 비교 연산자(`<`, `>`, `<=`, `>=`)를 지원하여 dataclass 인스턴스 간 비교가 가능하다
+
+```python
+from dataclasses import dataclass
+
+@dataclass(order=True)
+class Student:
+    name: str
+    age: int
+    grade: float
+
+# 비교 연산자 사용 가능
+student1 = Student("Alice", 20, 3.8)
+student2 = Student("Bob", 19, 3.9)
+student3 = Student("Charlie", 21, 3.7)
+
+print(student1 < student2)  # True (첫 번째 필드부터 순서대로 비교)
+print(student2 > student3)  # True
+
+# 정렬도 가능
+students = [student1, student2, student3]
+sorted_students = sorted(students)
+for s in sorted_students:
+    print(f"{s.name}: {s.grade}")
+```
+
+#### unsafe_hash=True
+- mutable dataclass를 hashable하게 만든다
+- **주의 요망**: mutable 객체를 해시하면 객체 상태가 변경된 후 예상치 못한 동작이 발생할 수 있다
+
+```python
+@dataclass(unsafe_hash=True)
+class MutableConfig:
+    host: str
+    port: int
+    settings: dict
+
+config = MutableConfig("localhost", 8080, {"debug": True})
+config_hash = hash(config)
+
+# 해시 후 객체 변경
+config.settings["debug"] = False
+
+# 주의: 해시값이 변경되었지만 set/dict에서는 여전히 같은 객체로 인식
+config_set = {config}
+print(config in config_set)  # True (예상과 다를 수 있음)
+```
+
+### __bool__
+- 객체가 불린 컨텍스트에서 어떻게 동작할지 정의하는 메서드
+- 데이터가 없거나 빈 상태일 때 `False`로 처리하고 싶을 때 유용하다
+
+```python
+class DataContainer:
+    def __init__(self, data=None):
+        self.data = data or []
+    
+    def __bool__(self):
+        # 데이터가 있으면 True, 없으면 False
+        return len(self.data) > 0
+    
+    def add_item(self, item):
+        self.data.append(item)
+
+container = DataContainer()
+print(bool(container))  # False
+
+if not container:
+    print("컨테이너가 비어있습니다")
+
+container.add_item("데이터")
+print(bool(container))  # True
+
+if container:
+    print("컨테이너에 데이터가 있습니다")
+```
+
+## 9. 면접 질문 & 답변
 
 ### Q: 파이썬의 매직 메서드란 무엇이고, 실무에서 사용해본 적이 있나요?
 **A:** 
@@ -746,46 +717,85 @@ class Settings:
 3. **예측 가능성**: 객체 생성 후 상태가 변하지 않아 코드의 동작을 예측하기 쉽습니다.
 4. **성능 최적화**: Python이 작은 정수나 문자열을 인터닝하여 메모리를 절약할 수 있습니다.
 
-### Q: 메모리 최적화를 위해 어떤 기법을 사용하나요?
+### Q: __new__와 __init__의 차이는 무엇인가요?
 **A:** 
-1. **`__slots__` 사용**: 인스턴스 딕셔너리 대신 슬롯을 사용하여 메모리 사용량 감소
-2. **가비지 컬렉션 관리**: `gc.collect()`로 순환 참조 해결
-3. **객체 풀링**: 자주 생성/삭제되는 객체를 재사용
-4. **약한 참조**: `weakref`를 사용하여 메모리 누수 방지
 
-### Q: 순환 참조 문제를 어떻게 해결하나요?
-**A:** 
-1. **약한 참조 사용**: `weakref.ref()`로 순환 참조 방지
-2. **가비지 컬렉션**: `gc.collect()`로 주기적 정리
-3. **참조 구조 설계**: 순환 참조가 발생하지 않도록 아키텍처 설계
-4. **컨텍스트 매니저**: `with` 문으로 리소스 자동 정리
+```text
+`__new__`는 인스턴스를 생성할 때 호출되는 메서드로, 메모리를 할당하고 객체를 생성하는 역할을 합니다.
+반면 `__init__`은 이미 생성된 인스턴스를 초기화하는 역할을 합니다.
 
-### Q: `is`와 `==`의 차이점을 설명해주세요.
-**A:** 
-- **`==`**: **값 비교**를 수행합니다. 두 객체의 내용이 같은지 확인합니다.
-- **`is`**: **객체 ID 비교**를 수행합니다. 두 변수가 같은 메모리 위치를 가리키는지 확인합니다.
-
-**예시**:
-```python
-a = [1, 2, 3]
-b = [1, 2, 3]
-print(a == b)  # True (값이 같음)
-print(a is b)  # False (다른 객체)
-
-# 작은 정수는 인터닝으로 인해 같은 객체
-x = 100
-y = 100
-print(x is y)  # True
+예를 들어 싱글톤 패턴처럼 객체 생성을 제어하고 싶을 때는 `__new__`를 재정의해야 하고,
+일반적으로 필드 값을 설정하거나 초기화하는 작업은 `__init__`에서 수행합니다.
 ```
 
-### Q: `__slots__`를 언제 사용하나요?
+### Q: 그럼 __new__는 항상 오버라이딩해야 하나요?
 **A:** 
-1. **메모리 최적화가 중요한 경우**: 대량의 객체를 생성할 때
-2. **속성 접근 속도 향상이 필요한 경우**: 자주 접근하는 속성이 많을 때
-3. **동적 속성 추가를 방지하고 싶은 경우**: 클래스 구조를 고정하고 싶을 때
-4. **제한된 메모리 환경**: 임베디드 시스템이나 서버 환경
+"아니요. 대부분의 경우 `__init__`만 재정의하면 충분합니다.
+`__new__`는 불변(immutable) 객체(예: tuple, str, int 등)의 서브클래스를 만들거나 싱글톤 패턴처럼 인스턴스 생성을 제어할 때만 재정의하는 경우가 많습니다."
 
-**주의사항**: 상속 시 부모 클래스의 `__slots__`와 충돌할 수 있으며, 동적 속성 추가가 불가능합니다.
+
+### Q: __str__과 __repr__의 차이는 무엇인가요?
+**A:** 
+"`__str__`은 사용자가 보기 좋게 만든 문자열을 반환하며, print() 함수나 str() 함수에 사용됩니다.
+반면 `__repr__`은 개발자가 디버깅할 때 쓰기 위한 공식적인 표현을 반환하며, eval()로 객체를 복원할 수 있는 형태가 이상적입니다.
+
+즉, `__str__`은 "사람이 읽기 좋은", `__repr__`은 "개발자가 디버깅하기 좋은" 표현입니다."
+
+
+### Q: 두 메서드를 모두 정의하지 않으면 어떻게 되나요?
+**A:** 
+"`__str__`이 정의되지 않은 경우, `str()`과 `print()`는 `__repr__`의 반환값을 대신 사용합니다.
+따라서 최소한 `__repr__`은 정의해 두는 것이 디버깅이나 로그 출력 시 유용합니다."
+
+
+### Q: __eq__, __hash__는 언제 함께 재정의해야 하나요?
+**A:** 
+"`__eq__`만 재정의하면 == 비교는 가능하지만, 객체를 set이나 dict의 key로 쓸 수 없습니다.
+이때 `__hash__`도 함께 재정의해서 두 객체가 같다면 해시값도 같게 해줘야 합니다.
+즉, ==가 True면 hash()도 같아야 set, dict에서 의도대로 동작합니다."
+
+
+### Q: 그렇다면 __hash__를 재정의할 때 주의할 점은?
+**A:** 
+"`__eq__`가 True인 두 객체는 반드시 같은 `__hash__` 값을 가져야 합니다. 
+하지만 그 반대는 꼭 성립하지 않아도 됩니다.
+불변 객체만 hashable해야 하므로, 내부 상태가 변할 수 있는 객체에 대해서는 `__hash__ = None`으로 비활성화하는 것이 좋습니다."
+
+### Q: __call__ 메서드는 언제 사용하나요?
+**A:** 
+"`__call__`은 인스턴스를 함수처럼 호출할 수 있게 만들어주는 메서드입니다.
+예를 들어 함수 객체처럼 행동하는 클래스나, 상태를 기억하는 콜백 함수(예: 데코레이터 내부 구현)에 사용됩니다."
+
+### Q: __del__ 메서드의 문제점과 대안은 무엇인가요?
+**A:** 
+"`__del__`은 객체 소멸 시점이 예측 불가능하고, 가비지 컬렉션에 의존하기 때문에 실무에서는 권장하지 않습니다.
+대신 `with` 구문과 `__enter__`, `__exit__` 메서드를 사용하여 리소스 관리를 명시적으로 하는 것이 안전하고 예측 가능합니다."
+
+### Q: __contains__ 메서드는 언제 구현하나요?
+**A:** 
+"`in` 연산자를 지원하고 싶을 때 구현합니다. 예를 들어 설정 클래스나 캐시 클래스에서 `'key' in config` 같은 문법을 사용하고 싶을 때 유용합니다.
+`__getitem__`과 함께 구현하면 dict처럼 동작하는 객체를 만들 수 있습니다."
+
+### Q: __copy__와 __deepcopy__를 커스터마이징하는 이유는?
+**A:** 
+"기본 복사 동작이 의도한 대로 동작하지 않을 때입니다. 특히 mutable 객체를 포함하는 클래스에서는 얕은 복사로 인해 참조가 공유되어 예상치 못한 side effect가 발생할 수 있습니다.
+`__deepcopy__`를 구현하면 완전히 독립적인 복사본을 만들 수 있습니다."
+
+### Q: @dataclass의 order=True 옵션은 언제 사용하나요?
+**A:** 
+"인스턴스 간 비교나 정렬이 필요할 때 사용합니다. 예를 들어 학생들의 성적 순으로 정렬하거나, 날짜 객체들을 시간순으로 비교할 때 유용합니다.
+하지만 복잡한 비교 로직이 필요하다면 `__lt__`, `__gt__` 등을 직접 구현하는 것이 더 유연합니다."
+
+### Q: unsafe_hash=True를 사용할 때 주의할 점은?
+**A:** 
+"mutable 객체를 hashable하게 만들기 때문에 매우 위험합니다. 객체 상태가 변경된 후에도 set이나 dict에서 예전 해시값으로 인식되어 예상치 못한 동작이 발생할 수 있습니다.
+가능하면 immutable 객체를 사용하거나, 해시가 필요하지 않다면 `__hash__ = None`으로 설정하는 것이 안전합니다."
+
+### Q: __bool__ 메서드는 언제 구현하나요?
+**A:** 
+"객체가 빈 상태인지 아닌지를 판단하고 싶을 때 구현합니다. 예를 들어 데이터 컨테이너가 비어있는지, 설정이 로드되었는지 등을 `if obj:` 같은 문법으로 확인하고 싶을 때 유용합니다.
+`__len__`과 함께 구현하면 더 직관적인 동작을 만들 수 있습니다."
+
 
 ---
 
