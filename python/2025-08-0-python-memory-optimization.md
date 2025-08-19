@@ -305,11 +305,302 @@ except Exception as e:
     print(f"에러: {e}")
 ```
 
+## 7. 고급 메모리 최적화 기법
+
+### 7.1 제너레이터 (yield)를 활용한 메모리 효율성
+
+**제너레이터는 대용량 반복 처리를 위한 메모리 효율 도구입니다.**
+
+```python
+import sys
+
+# 메모리 비효율적인 방식 (전체 리스트 생성)
+def get_large_list_bad(n):
+    """전체 리스트를 메모리에 로드 - 메모리 비효율적"""
+    return [i * i for i in range(n)]
+
+# 메모리 효율적인 방식 (제너레이터)
+def get_large_list_good(n):
+    """제너레이터로 하나씩 생성 - 메모리 효율적"""
+    for i in range(n):
+        yield i * i
+
+# 메모리 사용량 비교
+n = 1000000
+
+# 나쁜 방식: 전체 리스트 생성
+print("=== 나쁜 방식 (전체 리스트) ===")
+bad_list = get_large_list_bad(n)
+print(f"리스트 크기: {sys.getsizeof(bad_list)} bytes")
+
+# 좋은 방식: 제너레이터
+print("\n=== 좋은 방식 (제너레이터) ===")
+good_gen = get_large_list_good(n)
+print(f"제너레이터 크기: {sys.getsizeof(good_gen)} bytes")
+
+# 제너레이터 사용 예시
+print("\n=== 제너레이터 활용 ===")
+def process_large_file(filename):
+    """대용량 파일을 메모리 효율적으로 처리"""
+    with open(filename, 'r') as file:
+        for line in file:  # 한 줄씩 읽기
+            yield line.strip()
+
+# 실제 사용 시
+# for line in process_large_file('large_file.txt'):
+#     process_line(line)  # 메모리 사용량 최소화
+```
+
+### 7.2 GC (가비지 컬렉터) 튜닝
+
+**장기 실행 서비스에서는 `gc.collect()`로 타이밍 조절이 성능에 영향 줄 수 있습니다.**
+
+```python
+import gc
+import time
+import sys
+
+class MemoryIntensive:
+    def __init__(self):
+        self.data = [i for i in range(10000)]
+    
+    def __del__(self):
+        pass
+
+def gc_tuning_example():
+    """GC 튜닝 예시"""
+    print("=== GC 튜닝 예시 ===")
+    
+    # GC 비활성화 (성능이 중요한 구간)
+    gc.disable()
+    print("GC 비활성화됨")
+    
+    # 메모리 집약적 작업
+    objects = []
+    for i in range(1000):
+        obj = MemoryIntensive()
+        objects.append(obj)
+    
+    print(f"객체 생성 후 메모리: {sys.getsizeof(objects)} bytes")
+    
+    # 수동 GC 실행 (적절한 타이밍에)
+    print("수동 GC 실행...")
+    start_time = time.time()
+    collected = gc.collect()
+    end_time = time.time()
+    
+    print(f"GC 실행 시간: {end_time - start_time:.4f}초")
+    print(f"수집된 객체: {collected}")
+    
+    # GC 재활성화
+    gc.enable()
+    print("GC 재활성화됨")
+
+# GC 설정 조정
+def optimize_gc_settings():
+    """GC 설정 최적화"""
+    print("\n=== GC 설정 최적화 ===")
+    
+    # 임계값 조정
+    print(f"기본 임계값: {gc.get_threshold()}")
+    
+    # 메모리 압박이 심한 경우 임계값 낮춤
+    gc.set_threshold(100, 5, 5)  # (threshold0, threshold1, threshold2)
+    print(f"조정된 임계값: {gc.get_threshold()}")
+    
+    # GC 통계
+    stats = gc.get_stats()
+    print(f"GC 통계: {stats}")
+
+# 실행
+if __name__ == "__main__":
+    gc_tuning_example()
+    optimize_gc_settings()
+```
+
+### 7.3 메모리 사용량 측정 도구
+
+**메모리 릭 추적에는 `tracemalloc`, `objgraph`가 유용합니다.**
+
+```python
+import tracemalloc
+import psutil
+import sys
+import gc
+
+def memory_measurement_tools():
+    """메모리 측정 도구 활용"""
+    print("=== 메모리 측정 도구 ===")
+    
+    # 1. tracemalloc - 메모리 할당 추적
+    print("\n1. tracemalloc 사용법:")
+    tracemalloc.start()
+    
+    # 메모리 사용량이 많은 작업
+    large_list = [i for i in range(100000)]
+    
+    current, peak = tracemalloc.get_traced_memory()
+    print(f"현재 메모리: {current / 1024:.1f} KB")
+    print(f"최대 메모리: {peak / 1024:.1f} KB")
+    
+    # 상위 메모리 사용자 확인
+    snapshot = tracemalloc.take_snapshot()
+    top_stats = snapshot.statistics('lineno')
+    
+    print("\n상위 메모리 사용자:")
+    for stat in top_stats[:3]:
+        print(f"  {stat.count} 블록: {stat.size / 1024:.1f} KB")
+        print(f"    {stat.traceback.format()}")
+    
+    tracemalloc.stop()
+    
+    # 2. psutil - 시스템 메모리 정보
+    print("\n2. psutil 사용법:")
+    process = psutil.Process()
+    memory_info = process.memory_info()
+    
+    print(f"RSS (물리 메모리): {memory_info.rss / 1024 / 1024:.1f} MB")
+    print(f"VMS (가상 메모리): {memory_info.vms / 1024 / 1024:.1f} MB")
+    
+    # 3. sys.getsizeof - 객체 크기
+    print("\n3. sys.getsizeof 사용법:")
+    print(f"빈 리스트: {sys.getsizeof([])} bytes")
+    print(f"빈 딕셔너리: {sys.getsizeof({})} bytes")
+    print(f"빈 튜플: {sys.getsizeof(())} bytes")
+    print(f"빈 문자열: {sys.getsizeof('')} bytes")
+
+def memory_leak_detection():
+    """메모리 릭 감지 예시"""
+    print("\n=== 메모리 릭 감지 ===")
+    
+    tracemalloc.start()
+    
+    # 메모리 릭이 의심되는 코드
+    leaked_objects = []
+    
+    for i in range(1000):
+        obj = [i] * 1000
+        leaked_objects.append(obj)
+        
+        if i % 100 == 0:
+            current, peak = tracemalloc.get_traced_memory()
+            print(f"반복 {i}: {current / 1024:.1f} KB")
+    
+    # 스냅샷 비교
+    snapshot1 = tracemalloc.take_snapshot()
+    
+    # 일부 객체 제거
+    del leaked_objects[::2]  # 절반 제거
+    gc.collect()
+    
+    snapshot2 = tracemalloc.take_snapshot()
+    
+    # 차이점 분석
+    top_stats = snapshot2.compare_to(snapshot1, 'lineno')
+    
+    print("\n메모리 변화:")
+    for stat in top_stats[:3]:
+        print(f"  {stat.size_diff / 1024:.1f} KB 변화")
+    
+    tracemalloc.stop()
+
+# 실행
+if __name__ == "__main__":
+    memory_measurement_tools()
+    memory_leak_detection()
+```
+
+### 7.4 컨테이너 객체별 비용
+
+**튜플은 리스트보다 가볍고, 딕셔너리는 키가 많을수록 메모리 overhead가 큽니다.**
+
+```python
+import sys
+from collections import namedtuple
+
+def container_memory_comparison():
+    """컨테이너별 메모리 사용량 비교"""
+    print("=== 컨테이너별 메모리 비교 ===")
+    
+    # 기본 컨테이너 비교
+    empty_containers = {
+        'list': [],
+        'tuple': (),
+        'dict': {},
+        'set': set(),
+        'frozenset': frozenset()
+    }
+    
+    print("빈 컨테이너 크기:")
+    for name, container in empty_containers.items():
+        size = sys.getsizeof(container)
+        print(f"  {name:12}: {size:3} bytes")
+    
+    # 데이터가 있는 경우 비교
+    print("\n데이터가 있는 컨테이너 크기:")
+    
+    # 리스트 vs 튜플
+    data = list(range(100))
+    list_obj = data
+    tuple_obj = tuple(data)
+    
+    print(f"  list[100]:  {sys.getsizeof(list_obj):3} bytes")
+    print(f"  tuple(100): {sys.getsizeof(tuple_obj):3} bytes")
+    print(f"  차이:       {sys.getsizeof(list_obj) - sys.getsizeof(tuple_obj):3} bytes")
+    
+    # 딕셔너리 크기 변화
+    print("\n딕셔너리 크기 변화:")
+    for i in [0, 1, 2, 4, 8, 16, 32, 64]:
+        d = {j: j for j in range(i)}
+        size = sys.getsizeof(d)
+        print(f"  {i:2}개 키: {size:3} bytes")
+    
+    # namedtuple vs 일반 클래스
+    print("\nnamedtuple vs 일반 클래스:")
+    
+    # namedtuple
+    Point = namedtuple('Point', ['x', 'y'])
+    point_nt = Point(1, 2)
+    
+    # 일반 클래스
+    class RegularPoint:
+        __slots__ = ['x', 'y']
+        def __init__(self, x, y):
+            self.x = x
+            self.y = y
+    
+    point_reg = RegularPoint(1, 2)
+    
+    print(f"  namedtuple:     {sys.getsizeof(point_nt):3} bytes")
+    print(f"  __slots__ 클래스: {sys.getsizeof(point_reg):3} bytes")
+
+def memory_optimization_tips():
+    """메모리 최적화 팁"""
+    print("\n=== 메모리 최적화 팁 ===")
+    
+    tips = [
+        "1. 불변 데이터는 튜플 사용 (리스트보다 가벼움)",
+        "2. 작은 컬렉션은 set보다 frozenset 고려",
+        "3. 딕셔너리 키가 많으면 메모리 overhead 증가",
+        "4. __slots__는 메모리 절약 + 속도 향상",
+        "5. 제너레이터로 대용량 데이터 처리",
+        "6. 약한 참조로 순환 참조 방지",
+        "7. 적절한 GC 타이밍으로 성능 최적화"
+    ]
+    
+    for tip in tips:
+        print(f"  {tip}")
+
+# 실행
+if __name__ == "__main__":
+    container_memory_comparison()
+    memory_optimization_tips()
+```
+
 ---
 
 <details>
 <summary>cf. reference</summary>
 
 - 
-
 </details>

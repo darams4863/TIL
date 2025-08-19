@@ -14,11 +14,6 @@ tags:
 (Asynchronous), 블럭(Block), 넌블럭(Non-block)을 
 Python코드를 통해 알아보자. 
 
-## 📋 목차
-1. **개념 및 문법** - async/await, asyncio, 이벤트 루프
-2. **실무 활용** - FastAPI, aiohttp, asyncpg, DB 연결
-3. **면접 대비** - 차이점, 원리 설명, 예시 질문
-
 ---
 
 ## 1. 개념 및 문법
