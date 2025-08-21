@@ -1,6 +1,6 @@
 ---
 title: "Python 메모리 최적화 기법"
-date: 2025-08-18
+date: 2025-08-20
 categories:
   - python
 tags:
