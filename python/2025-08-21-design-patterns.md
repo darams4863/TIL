@@ -10,7 +10,7 @@ tags:
   - decorator-pattern
   - singleton-pattern
   - observer-pattern
-  - python-design
+  - python-design-patterns
 ---
 
 # 파이썬에서 자주 쓰이는 디자인 패턴
@@ -372,13 +372,12 @@ def get_payment_service() -> PaymentService:
 - 기존 클래스(또는 함수)의 코드를 변경하지 않고, 기능을 덧붙이고 싶은데, 상속보다 유연하게 기능 조합이 필요할 때 사용
 
 ### ✓ Python 예시 
-- 
+
 ```python
 from functools import wraps
 import time
 import random
 
-# 🎯 Decorator - Logger
 def logger(func):
     """로깅 기능을 추가하는 데코레이터"""
     @wraps(func)
@@ -389,7 +388,6 @@ def logger(func):
         return result
     return wrapper
 
-# 🎯 Decorator - Retry
 def retry(max_attempts: int = 3, delay: float = 1.0):
     """에러 발생 시 재시도 기능을 추가하는 데코레이터"""
     def decorator(func):
@@ -407,7 +405,6 @@ def retry(max_attempts: int = 3, delay: float = 1.0):
         return wrapper
     return decorator
 
-# 🎯 핵심 기능 함수들 - 데코레이터 문법으로 적용
 @logger
 def say_hello(name: str) -> str:
     """간단한 인사 함수 (핵심 기능)"""
@@ -760,8 +757,6 @@ subject.notify("새로운 공지가 있습니다!")
 # [사용자 A] 알림 받음: 새로운 공지가 있습니다!
 # [사용자 B] 알림 받음: 새로운 공지가 있습니다!
 ```
-
-### ✓ 면접 질문 (Interview Questions)
 
 #### cf. 옵저버 패턴과 pub/sub의 차이점은?
 - **옵저버**: Subject와 Observer가 직접 연결, 동기적 통신
