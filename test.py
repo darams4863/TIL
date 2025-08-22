@@ -1,52 +1,80 @@
 from functools import wraps
-import time
-import random
+from typing import Callable, Any
+import jwt
+from datetime import datetime, timedelta
+import traceback
+SECRET_KEY = "secret"
 
-# 🎯 Decorator - Logger
-def logger(func):
-    """로깅 기능을 추가하는 데코레이터"""
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        print(f"[Logger] Function {func.__name__} called with args={args}, kwargs={kwargs}")
-        result = func(*args, **kwargs)
-        print(f"[Logger] Function {func.__name__} returned {result}")
-        return result
-    return wrapper
-
-# 🎯 Decorator - Retry
-def retry(max_attempts: int = 3, delay: float = 1.0):
-    """에러 발생 시 재시도 기능을 추가하는 데코레이터"""
-    def decorator(func):
+def require_auth(required_roles: list = None):
+    """인증 및 권한 체크 데코레이터"""
+    def decorator(func: Callable) -> Callable:
         @wraps(func)
-        def wrapper(*args, **kwargs):
-            for attempt in range(1, max_attempts + 1):
-                try:
-                    print(f"[Retry] Attempt {attempt}")
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    print(f"[Retry] Failed attempt {attempt}: {e}")
-                    if attempt == max_attempts:
-                        raise
-                    time.sleep(delay)
+        def wrapper(*args, **kwargs) -> Any:
+            token = kwargs.get('token') or (args[0] if args else None)
+
+            if not token:
+                raise ValueError("인증 토큰이 필요합니다")
+
+            try:
+                # JWT 토큰 검증
+                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                user_id = payload.get('user_id')
+                user_roles = payload.get('roles', [])
+
+                # 권한 체크
+                if required_roles and not any(role in user_roles for role in required_roles):
+                    raise PermissionError(f"필요한 권한: {required_roles}, 현재 권한: {user_roles}")
+
+                # 원본 함수에 사용자 정보 추가
+                kwargs['user_id'] = user_id
+                kwargs['user_roles'] = user_roles
+
+                return func(*args, **kwargs)
+
+            except jwt.ExpiredSignatureError:
+                raise ValueError("토큰이 만료되었습니다")
+            except jwt.InvalidTokenError:
+                raise ValueError("유효하지 않은 토큰입니다")
+
         return wrapper
     return decorator
 
-# 🎯 핵심 기능 함수들 - 데코레이터 문법으로 적용
-@logger
-def say_hello(name: str) -> str:
-    """간단한 인사 함수 (핵심 기능)"""
-    return f"Hello, {name}!"
+# 사용 예시
+@require_auth(required_roles=["admin"])
+def delete_user(user_id: int, token: str = None, **kwargs) -> dict:
+    """사용자 삭제 함수 - admin 권한 필요"""
+    return {
+        "message": f"사용자 {user_id} 삭제 완료",
+        "deleted_by": kwargs.get('user_id'),
+        "roles": kwargs.get('user_roles')
+    }
 
-@logger
-@retry(max_attempts=3, delay=0.5)
-def unstable_greet(name: str) -> str: # unstable_greet = logger(retry(...)(unstable_greet))랑 같은 의미 
-    """가끔 실패하는 함수 (불안정한 인사)"""
-    if random.random() < 0.6:
-        raise ValueError("임시 오류 발생!")
-    return f"Nice to meet you, {name}"
+# 테스트용 토큰 생성
+def create_test_token(user_id: int, roles: list):
+    payload = {
+        'user_id': user_id,
+        'roles': roles,
+        'exp': datetime.now() + timedelta(hours=1)
+    }
+    token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    # PyJWT 2.x 이상에서는 str로 변환 필요
+    if isinstance(token, bytes):
+        token = token.decode("utf-8")
+    return token
 
-# ✅ 실행 예시
+# 테스트 실행
 if __name__ == "__main__":
-    # print(say_hello("Alice"))
-    print()
-    print(unstable_greet("Bob"))
+    admin_token = create_test_token(1, ["admin", "user"])
+    user_token = create_test_token(2, ["user"])
+
+    try:
+        # ✅ admin 권한 → 성공
+        result = delete_user(user_id=123, token=admin_token)
+        print("✅ admin_token 실행 결과:", result)
+
+        # ❌ user 권한만 → 실패
+        result = delete_user(user_id=123, token=user_token)
+        print("❌ user_token 실행 결과:", result)
+    except Exception as e:
+        # print(traceback.format_exc())
+        print(f"🚫 예외 발생: {e}")
