@@ -14,64 +14,40 @@ tags:
 
 # 파이썬 GIL의 모든 것: 병렬성의 적인가, 필요한 제약인가?
 
-## 📋 목차
-1. **GIL(전역 인터프리터 락)이란?** - 기본 개념과 동작 원리
-2. **왜 GIL이 필요한가?** - 메모리 관리와 GC 안정성
-3. **GIL의 단점은?** - CPU 바운드 작업의 병목 현상
-4. **그럼 언제 괜찮은가?** - I/O 바운드 작업에서의 효과
-5. **GIL의 대안** - 멀티프로세싱 vs 비동기 프로그래밍
-6. **실무 예시** - GIL 우회 전략과 실제 적용법
-7. **면접 대비** - 레벨별 질문과 답변
-
----
-
 ## 1. GIL(전역 인터프리터 락)이란?
+- GIL(Global Interpreter Lock)이란 CPython 인터프리터에서만 존재하는 전역락으로, 한 번에 하나의 스레드만 Python 바이트코드를 실행할 수 있게 제한/보장하는 것을 의미한다. 
+- GIL 이유: C로 구현된 CPython의 메모리 관리(GC 등)에서 race condition 방지를 위해 도입됨. 
+    - cf. race condition 발생 이유: 
+- GIL은 멀티스레드가 진정한 병렬 실행을 하지 못하게 한다. 
+
+### GIL과 병렬성의 관계
+### 왜 GIL이 필요한가?
+- 메모리 관리의 단순화
+- GC 안정성
+- C 확장 호환성
+
+| 이유 | 설명 | 예시 |
+|------|------|------|
+| **메모리 관리 단순화** | Python 객체의 메모리 관리를 단순하게 만듦 | 레퍼런스 카운트 동시 수정 방지 |
+| **GC 안정성** | 가비지 컬렉터의 안정성과 성능 보장 | race condition으로 인한 메모리 누수 방지 |
+| **C 확장 호환성** | C로 작성된 확장 모듈과의 호환성 유지 | numpy, pandas 등과의 안전한 연동 |
+
+### GIL의 단점은?
+- CPU 바운드 작업의 병목
+    - 멀티스레딩을 사용해도 **CPU 바운드 작업에서는 성능 향상이 없습니다**. 오히려 컨텍스트 스위칭 오버헤드로 인해 성능이 저하될 수 있습니다.
+
+
+| 단점 | 설명 | 영향 |
+|------|------|------|
+| **CPU 바운드 작업 병목** | 멀티스레딩으로도 성능 향상 없음 | 병렬 처리의 이점 상실 |
+| **컨텍스트 스위칭 오버헤드** | 스레드 간 전환 비용 발생 | 불필요한 성능 저하 |
+| **낮은 CPU 활용률** | 멀티코어 프로세서를 제대로 활용 못함 | 하드웨어 자원 낭비 |
+
+
+### 파이썬에서 병렬 처리 방식 4가지
 
 ### 1.1 기본 개념
 
-**GIL (Global Interpreter Lock)**은 CPython 인터프리터 내부의 락 메커니즘으로, 한 번에 하나의 스레드만 Python 바이트코드를 실행할 수 있도록 보장합니다.
-
-```python
-import threading
-import time
-
-def cpu_bound_task(n):
-    """CPU 집약적인 작업"""
-    result = 0
-    for i in range(n):
-        result += i ** 2
-    return result
-
-def demonstrate_gil():
-    """GIL 동작 시연"""
-    print("=== GIL 동작 시연 ===")
-    
-    # 단일 스레드 실행
-    start_time = time.time()
-    result1 = cpu_bound_task(10000000)
-    single_thread_time = time.time() - start_time
-    print(f"단일 스레드 실행 시간: {single_thread_time:.3f}초")
-    
-    # 멀티 스레드 실행 (GIL로 인해 실제로는 순차 실행)
-    start_time = time.time()
-    
-    thread1 = threading.Thread(target=cpu_bound_task, args=(10000000,))
-    thread2 = threading.Thread(target=cpu_bound_task, args=(10000000,))
-    
-    thread1.start()
-    thread2.start()
-    
-    thread1.join()
-    thread2.join()
-    
-    multi_thread_time = time.time() - start_time
-    print(f"멀티 스레드 실행 시간: {multi_thread_time:.3f}초")
-    print(f"성능 향상: {single_thread_time / multi_thread_time:.2f}x")
-
-# 실행
-if __name__ == "__main__":
-    demonstrate_gil()
-```
 
 ### 1.2 인터뷰 1문 정리
 
@@ -134,94 +110,7 @@ if __name__ == "__main__":
     demonstrate_reference_counting()
 ```
 
-### 2.2 GIL의 필요성 요약
-
-| 이유 | 설명 | 예시 |
-|------|------|------|
-| **메모리 관리 단순화** | Python 객체의 메모리 관리를 단순하게 만듦 | 레퍼런스 카운트 동시 수정 방지 |
-| **GC 안정성** | 가비지 컬렉터의 안정성과 성능 보장 | race condition으로 인한 메모리 누수 방지 |
-| **C 확장 호환성** | C로 작성된 확장 모듈과의 호환성 유지 | numpy, pandas 등과의 안전한 연동 |
-
-## 3. GIL의 단점은?
-
-### 3.1 CPU 바운드 작업의 병목
-
-멀티스레딩을 사용해도 **CPU 바운드 작업에서는 성능 향상이 없습니다**. 오히려 컨텍스트 스위칭 오버헤드로 인해 성능이 저하될 수 있습니다.
-
-```python
-import threading
-import multiprocessing
-import time
-import math
-
-def cpu_intensive_task(n):
-    """CPU 집약적인 작업 (소수 찾기)"""
-    primes = []
-    for num in range(2, n + 1):
-        is_prime = True
-        for i in range(2, int(math.sqrt(num)) + 1):
-            if num % i == 0:
-                is_prime = False
-                break
-        if is_prime:
-            primes.append(num)
-    return len(primes)
-
-def benchmark_cpu_bound():
-    """CPU 바운드 작업 성능 벤치마크"""
-    n = 10000
-    
-    print("=== CPU 바운드 작업 성능 비교 ===")
-    
-    # 1. 단일 스레드
-    start_time = time.time()
-    result1 = cpu_intensive_task(n)
-    single_time = time.time() - start_time
-    print(f"단일 스레드: {single_time:.3f}초, 결과: {result1}")
-    
-    # 2. 멀티 스레드 (GIL로 인해 순차 실행)
-    start_time = time.time()
-    
-    thread1 = threading.Thread(target=cpu_intensive_task, args=(n//2,))
-    thread2 = threading.Thread(target=cpu_intensive_task, args=(n//2,))
-    
-    thread1.start()
-    thread2.start()
-    
-    thread1.join()
-    thread2.join()
-    
-    multi_thread_time = time.time() - start_time
-    print(f"멀티 스레드: {multi_thread_time:.3f}초 (GIL로 인해 순차 실행)")
-    
-    # 3. 멀티프로세스 (GIL 우회)
-    start_time = time.time()
-    
-    with multiprocessing.Pool(processes=2) as pool:
-        results = pool.map(cpu_intensive_task, [n//2, n//2])
-    
-    multi_process_time = time.time() - start_time
-    total_result = sum(results)
-    print(f"멀티프로세스: {multi_process_time:.3f}초, 결과: {total_result}")
-    
-    print(f"\n성능 비교:")
-    print(f"멀티스레드 vs 단일스레드: {multi_thread_time/single_time:.2f}x")
-    print(f"멀티프로세스 vs 단일스레드: {single_time/multi_process_time:.2f}x")
-
-# 실행
-if __name__ == "__main__":
-    benchmark_cpu_bound()
-```
-
-### 3.2 주요 단점 요약
-
-| 단점 | 설명 | 영향 |
-|------|------|------|
-| **CPU 바운드 작업 병목** | 멀티스레딩으로도 성능 향상 없음 | 병렬 처리의 이점 상실 |
-| **컨텍스트 스위칭 오버헤드** | 스레드 간 전환 비용 발생 | 불필요한 성능 저하 |
-| **낮은 CPU 활용률** | 멀티코어 프로세서를 제대로 활용 못함 | 하드웨어 자원 낭비 |
-
-### 3.3 면접 예상 질문
+#### 면접 예상 질문
 
 **Q: "GIL이 멀티코어 CPU 활용에 어떤 제한을 주나요?"**
 - 한 번에 하나의 스레드만 Python 코드 실행 가능
@@ -233,60 +122,10 @@ if __name__ == "__main__":
 - 컨텍스트 스위칭 오버헤드만 발생
 - CPU 집약적 작업은 멀티프로세싱이 유리
 
-## 4. 그럼 언제 괜찮은가? (I/O 바운드 작업)
+**Q: 그럼 언제 괜찮은가? (I/O 바운드 작업)** 
+- I/O 바운드 작업에서의 효과
+    - **GIL은 I/O 바운드 작업에는 거의 영향을 주지 않습니다**. 스레드가 블로킹 상태(파일 I/O, 네트워크 통신 등)에 들어가면 GIL이 해제되어 다른 스레드가 실행될 수 있습니다.
 
-### 4.1 I/O 바운드 작업에서의 효과
-
-**GIL은 I/O 바운드 작업에는 거의 영향을 주지 않습니다**. 스레드가 블로킹 상태(파일 I/O, 네트워크 통신 등)에 들어가면 GIL이 해제되어 다른 스레드가 실행될 수 있습니다.
-
-```python
-import threading
-import time
-import requests
-from concurrent.futures import ThreadPoolExecutor
-
-def io_bound_task(url):
-    """I/O 바운드 작업 (HTTP 요청)"""
-    try:
-        response = requests.get(url, timeout=5)
-        return f"{url}: {response.status_code}"
-    except Exception as e:
-        return f"{url}: 오류 - {e}"
-
-def benchmark_io_bound():
-    """I/O 바운드 작업 성능 벤치마크"""
-    urls = [
-        "https://httpbin.org/delay/1",
-        "https://httpbin.org/delay/1",
-        "https://httpbin.org/delay/1",
-        "https://httpbin.org/delay/1"
-    ]
-    
-    print("=== I/O 바운드 작업 성능 비교 ===")
-    
-    # 1. 순차 실행
-    start_time = time.time()
-    results_sequential = []
-    for url in urls:
-        result = io_bound_task(url)
-        results_sequential.append(result)
-    sequential_time = time.time() - start_time
-    print(f"순차 실행: {sequential_time:.3f}초")
-    
-    # 2. 멀티스레드 실행 (GIL이 I/O에서 해제됨)
-    start_time = time.time()
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        results_parallel = list(executor.map(io_bound_task, urls))
-    parallel_time = time.time() - start_time
-    print(f"멀티스레드: {parallel_time:.3f}초")
-    
-    print(f"성능 향상: {sequential_time / parallel_time:.2f}x")
-    print(f"시간 절약: {sequential_time - parallel_time:.3f}초")
-
-# 실행
-if __name__ == "__main__":
-    benchmark_io_bound()
-```
 
 ### 4.2 I/O 바운드 작업의 특징
 
@@ -640,52 +479,15 @@ GIL (Global Interpreter Lock)은 CPython 인터프리터의 락 메커니즘입�
 """
 ```
 
-## 🎯 실전용 요약 문장 (이력서/면접/블로그용)
 
-**"Python GIL의 제약을 이해하고, I/O 바운드 작업에는 비동기 프로그래밍을, CPU 바운드 작업에는 멀티프로세싱을 활용하여 고성능 백엔드 서비스를 구현했습니다. 특히 FastAPI 환경에서 비동기 처리를 기본 전략으로 하고, Celery와 ProcessPoolExecutor를 조합하여 GIL의 한계를 효과적으로 우회했습니다."**
 
-## 📚 학습 우선순위 (3년차 기준)
-
-| 우선순위 | 주제 | 익혀야 할 내용 |
-|----------|------|----------------|
-| **필수** | GIL 개념 | CPython 인터프리터의 락 메커니즘과 동작 원리 |
-| **필수** | 멀티스레딩 한계 | GIL로 인한 CPU 바운드 작업 병목 현상 |
-| **필수** | I/O vs CPU 바운드 | 작업 유형별 최적 처리 방법 |
-| **필수** | GIL 우회 전략 | 멀티프로세싱과 비동기 프로그래밍 활용 |
-| **추천** | 실무 적용 | FastAPI, Celery 등과의 조합 |
-| **추천** | 성능 최적화 | 병목 지점 분석과 해결 방법 |
-
-## 🚀 실무 적용 체크리스트
-
-### GIL 이해 및 대응
-- [ ] GIL의 개념과 필요성 이해
-- [ ] CPU 바운드 vs I/O 바운드 작업 구분
-- [ ] 멀티스레딩의 한계점 파악
-- [ ] 적절한 GIL 우회 전략 선택
-
-### 성능 최적화 전략
-- [ ] I/O 바운드 작업: 비동기 프로그래밍 적용
-- [ ] CPU 바운드 작업: 멀티프로세싱 활용
-- [ ] 백그라운드 작업: Celery + Redis 조합
-- [ ] 이미지/데이터 처리: ProcessPoolExecutor 사용
-
-### 모니터링 및 개선
-- [ ] 성능 병목 지점 분석
-- [ ] GIL로 인한 성능 저하 측정
-- [ ] 최적화 전략의 효과 검증
-- [ ] 지속적인 성능 개선
 
 ---
 
 <details>
 <summary>참고 자료</summary>
 
-- [Python GIL (Global Interpreter Lock)](https://wiki.python.org/moin/GlobalInterpreterLock)
-- [Understanding the Python GIL](https://realpython.com/python-gil/)
-- [Python Threading vs Multiprocessing](https://docs.python.org/3/library/multiprocessing.html)
-- [Asyncio Documentation](https://docs.python.org/3/library/asyncio.html)
-- [FastAPI Documentation](https://fastapi.tiangolo.com/)
-- [Celery Documentation](https://docs.celeryproject.org/)
+- 
 
 </details> 
 
